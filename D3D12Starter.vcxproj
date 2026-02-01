@@ -22,7 +22,7 @@
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{acf860a3-2352-4ab1-a8d0-00295a054e84}</ProjectGuid>
-    <RootNamespace>DX11Starter</RootNamespace>
+    <RootNamespace>DX12Starter</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />

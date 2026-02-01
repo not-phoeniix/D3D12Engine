@@ -1,2 +1,2 @@
-# D3D1Starter
-Starter code for a D3D11-based project
+# D3D12Engine
+A barebones rendering engine made for Direct3D 12 :D

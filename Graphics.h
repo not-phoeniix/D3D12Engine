@@ -1,40 +1,67 @@
 #pragma once
 
 #include <Windows.h>
-#include <d3d11_1.h>
+#include <d3d12.h>
+#include <dxgi1_6.h>
 #include <string>
 #include <wrl/client.h>
 
-#pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 
-namespace Graphics
-{
-	// --- GLOBAL VARS ---
+namespace Graphics {
+    // --- CONSTANTS ---
 
-	// Primary D3D11 API objects
-	inline Microsoft::WRL::ComPtr<ID3D11Device1> Device;
-	inline Microsoft::WRL::ComPtr<ID3D11DeviceContext1> Context;
-	inline Microsoft::WRL::ComPtr<IDXGISwapChain> SwapChain;
+    constexpr uint32_t NUM_BACK_BUFFERS = 2;
 
-	// Rendering buffers
-	inline Microsoft::WRL::ComPtr<ID3D11RenderTargetView> BackBufferRTV;
-	inline Microsoft::WRL::ComPtr<ID3D11DepthStencilView> DepthBufferDSV;
+    // --- GLOBAL VARS ---
 
-	// Debug Layer
-	inline Microsoft::WRL::ComPtr<ID3D11InfoQueue> InfoQueue;
+    // Primary D3D12 API objects
+    inline Microsoft::WRL::ComPtr<ID3D12Device> Device;
+    inline Microsoft::WRL::ComPtr<IDXGISwapChain> SwapChain;
 
-	// --- FUNCTIONS ---
+    // Command stuff!
+    inline Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandAllocator;
+    inline Microsoft::WRL::ComPtr<ID3D12CommandQueue> CommandQueue;
+    inline Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> CommandList;
 
-	// Getters
-	bool VsyncState();
-	std::wstring APIName();
+    // Back buffers for swapchain
+    inline Microsoft::WRL::ComPtr<ID3D12Resource> BackBuffers[NUM_BACK_BUFFERS];
+    inline Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> RTVHeap;
+    inline D3D12_CPU_DESCRIPTOR_HANDLE RTVHandles[NUM_BACK_BUFFERS] = {};
 
-	// General functions
-	HRESULT Initialize(unsigned int windowWidth, unsigned int windowHeight, HWND windowHandle, bool vsyncIfPossible);
-	void ShutDown();
-	void ResizeBuffers(unsigned int width, unsigned int height);
+    // Depth buffer for depth & stencil things !!
+    inline Microsoft::WRL::ComPtr<ID3D12Resource> DepthBuffer;
+    inline Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> DSVHeap;
+    inline D3D12_CPU_DESCRIPTOR_HANDLE DSVHandle = {};
 
-	// Debug Layer
-	void PrintDebugMessages();
+    // Sync objects !!!
+    inline Microsoft::WRL::ComPtr<ID3D12Fence> Fence;
+    inline HANDLE FenceEvent = 0;
+    inline uint64_t FenceCounter = 0;
+
+    // Debug Layer
+    inline Microsoft::WRL::ComPtr<ID3D12InfoQueue> InfoQueue;
+
+    // --- FUNCTIONS ---
+
+    // Getters
+    bool get_vsync_state();
+    std::wstring get_api_name();
+    uint32_t get_swap_chain_index();
+
+    // General functions
+    HRESULT Initialize(unsigned int windowWidth, unsigned int windowHeight, HWND windowHandle, bool vsyncIfPossible);
+    void ShutDown();
+    void ResizeBuffers(unsigned int width, unsigned int height);
+    void AdvanceSwapChainIndex();
+    Microsoft::WRL::ComPtr<ID3D12Resource> CreateStaticBuffer(size_t data_stride, uint32_t data_count, void* data);
+
+    // Command stuff & sync
+    void ResetAllocatorAndCommandList();
+    void CloseAndExecuteCommandList();
+    void WaitForGPU();
+
+    // Debug Layer
+    void PrintDebugMessages();
 }
