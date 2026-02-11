@@ -7,6 +7,7 @@ struct VertexShaderInput {
 
 struct VertexToPixel {
 	float4 position : SV_POSITION;
+	float2 uv : TEXCOORD;
 };
 
 cbuffer MatrixData : register(b0) {
@@ -21,6 +22,7 @@ VertexToPixel main(VertexShaderInput input) {
 	float4x4 wvp = mul(proj, mul(view, world));
 
 	output.position = mul(wvp, float4(input.position, 1.0f));
+	output.uv = input.uv;
 
 	return output;
 }

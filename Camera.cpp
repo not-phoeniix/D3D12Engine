@@ -59,8 +59,8 @@ void Camera::Update(float dt) {
     if (Input::KeyDown('A')) transform.MoveRelative(-moveSpeed * moveScale * dt, 0, 0);
 
     // absolute up/down movement
-    if (Input::KeyDown(VK_LSHIFT)) transform.MoveAbsolute(0, -moveSpeed * moveScale * dt, 0);
-    if (Input::KeyDown(VK_SPACE)) transform.MoveAbsolute(0, moveSpeed * moveScale * dt, 0);
+    if (Input::KeyDown('E')) transform.MoveAbsolute(0, moveSpeed * moveScale * dt, 0);
+    if (Input::KeyDown('Q')) transform.MoveAbsolute(0, -moveSpeed * moveScale * dt, 0);
 
     // mouse looking movement, only applies when lmb or rmb
     //   is clicked and imgui is not being interacted with
