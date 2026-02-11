@@ -34,6 +34,7 @@ class Transform {
     void MarkChildrenDirectionalsDirty();
 
    public:
+    Transform(const DirectX::XMFLOAT3 position);
     Transform();
     ~Transform();
     Transform(const Transform& other);

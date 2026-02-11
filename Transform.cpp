@@ -2,6 +2,21 @@
 
 using namespace DirectX;
 
+Transform::Transform(const DirectX::XMFLOAT3 position)
+  : position(position),
+    pitchYawRoll(0, 0, 0),
+    scale(1, 1, 1),
+    forward(0, 0, 1),
+    right(1, 0, 0),
+    up(0, 1, 0),
+    parent(nullptr),
+    children(),
+    matricesDirty(false),
+    directionalsDirty(false) {
+    XMStoreFloat4x4(&world, XMMatrixIdentity());
+    XMStoreFloat4x4(&worldInverseTranspose, XMMatrixIdentity());
+}
+
 Transform::Transform()
   : position(0, 0, 0),
     pitchYawRoll(0, 0, 0),

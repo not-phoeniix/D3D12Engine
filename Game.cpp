@@ -101,7 +101,7 @@ void Game::CreateRootSigAndPipelineState() {
     {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = {};
 
-        pso_desc.InputLayout.NumElements = input_elements.size();
+        pso_desc.InputLayout.NumElements = (uint32_t)input_elements.size();
         pso_desc.InputLayout.pInputElementDescs = input_elements.data();
         pso_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
@@ -162,8 +162,8 @@ void Game::CreateRootSigAndPipelineState() {
 // --------------------------------------------------------
 void Game::SceneInit() {
     camera = std::make_unique<Camera>(
-        DirectX::XMFLOAT3(0, 0, -10),
-        5,
+        DirectX::XMFLOAT3(0.0f, 0.0f, -10.0f),
+        5.0f,
         0.005f,
         XM_PIDIV2,
         Window::AspectRatio(),
@@ -172,6 +172,14 @@ void Game::SceneInit() {
     );
 
     entities.emplace_back(Mesh::Load(FixPath("../../Assets/Meshes/cube.obj").c_str()));
+    entities.emplace_back(
+        Mesh::Load(FixPath("../../Assets/Meshes/helix.obj").c_str()),
+        Transform({4.0f, 0.0f, 0.0f})
+    );
+    entities.emplace_back(
+        Mesh::Load(FixPath("../../Assets/Meshes/sphere.obj").c_str()),
+        Transform({-4.0f, 0.0f, 0.0f})
+    );
 }
 
 // --------------------------------------------------------

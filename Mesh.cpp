@@ -242,7 +242,7 @@ std::shared_ptr<Mesh> Mesh::Load(const char* path) {
     obj.close();
 
     return std::make_shared<Mesh>(
-        finalVertices.data(), finalVertices.size(),
-        finalIndices.data(), finalIndices.size()
+        finalVertices.data(), (uint32_t)finalVertices.size(),
+        finalIndices.data(), (uint32_t)finalIndices.size()
     );
 }
