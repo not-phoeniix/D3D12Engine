@@ -5,7 +5,7 @@
 #include "PathHelpers.h"
 #include "Window.h"
 #include <vector>
-
+#include "BufferStructs.h"
 #include <DirectXMath.h>
 
 // Needed for a helper function to load pre-compiled shader files
@@ -234,7 +234,17 @@ void Game::Draw(float deltaTime, float totalTime) {
     Graphics::CommandList->RSSetScissorRects(1, &scissor_rect);
     Graphics::CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+    Graphics::CommandList->SetDescriptorHeaps(1, Graphics::CBVSRVDescriptorHeap.GetAddressOf());
+
     for (auto& entity : entities) {
+        TransformBuffer data = {};
+        data.World = entity.get_transform().GetWorldMatrix();
+        data.View = camera->GetView();
+        data.Proj = camera->GetProjection();
+
+        D3D12_GPU_DESCRIPTOR_HANDLE handle = Graphics::CBHeapFillNext(&data, sizeof(data));
+        Graphics::CommandList->SetGraphicsRootDescriptorTable(0, handle);
+
         std::shared_ptr<Mesh> mesh = entity.get_mesh();
 
         D3D12_VERTEX_BUFFER_VIEW vb_view = mesh->get_vb_view();

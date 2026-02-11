@@ -258,7 +258,7 @@ HRESULT Graphics::Initialize(unsigned int windowWidth, unsigned int windowHeight
             Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(CBVSRVDescriptorHeap.GetAddressOf()));
 
             cbvsrv_descriptor_heap_increment_size =
-                (size_t)Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+                (size_t)Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         }
     }
 
@@ -506,8 +506,8 @@ D3D12_GPU_DESCRIPTOR_HANDLE Graphics::CBHeapFillNext(const void* data, size_t si
         D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle = CBVSRVDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
         D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle = CBVSRVDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
 
-        cpu_handle.ptr += ((uint64_t)cbv_descriptor_index * cbvsrv_descriptor_heap_increment_size);
-        gpu_handle.ptr += ((uint64_t)cbv_descriptor_index * cbvsrv_descriptor_heap_increment_size);
+        cpu_handle.ptr += ((size_t)cbv_descriptor_index * cbvsrv_descriptor_heap_increment_size);
+        gpu_handle.ptr += ((size_t)cbv_descriptor_index * cbvsrv_descriptor_heap_increment_size);
 
         D3D12_CONSTANT_BUFFER_VIEW_DESC desc = {};
         desc.BufferLocation = virtual_gpu_addr;
