@@ -2,6 +2,8 @@
 
 #include <d3d12.h>
 #include <wrl/client.h>
+#include "Camera.h"
+#include "GameEntity.h"
 
 class Game {
    public:
@@ -18,19 +20,17 @@ class Game {
 
    private:
     void CreateRootSigAndPipelineState();
-    void CreateGeometry();
+    void SceneInit();
     void ClearPrevFrame();
     void Present();
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline_state;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> vertex_buffer;
-    D3D12_VERTEX_BUFFER_VIEW vertex_buffer_view = {};
-    Microsoft::WRL::ComPtr<ID3D12Resource> index_buffer;
-    D3D12_INDEX_BUFFER_VIEW index_buffer_view = {};
-
     D3D12_VIEWPORT viewport = {};
     D3D12_RECT scissor_rect = {};
+
+    std::unique_ptr<Camera> camera;
+    std::vector<GameEntity> entities;
 };
 

@@ -1,13 +1,14 @@
 #pragma once
 
 #include <DirectXMath.h>
+#include <vector>
+#include <d3d12.h>
 
-// --------------------------------------------------------
-// A custom vertex definition
-//
-// You will eventually ADD TO this, and/or make more of these!
-// --------------------------------------------------------
 struct Vertex {
-    DirectX::XMFLOAT3 Position; // The local position of the vertex
-    DirectX::XMFLOAT4 Color;    // The color of the vertex
+    DirectX::XMFLOAT3 Position;
+    DirectX::XMFLOAT2 UV;
+    DirectX::XMFLOAT3 Normal;
+    DirectX::XMFLOAT3 Tangent;
 };
+
+std::vector<D3D12_INPUT_ELEMENT_DESC> vertex_get_input_elements();

@@ -13,6 +13,7 @@ namespace Graphics {
     // --- CONSTANTS ---
 
     constexpr uint32_t NUM_BACK_BUFFERS = 2;
+    constexpr uint32_t MAX_CBUFFERS = 1000;
 
     // --- GLOBAL VARS ---
 
@@ -35,6 +36,10 @@ namespace Graphics {
     inline Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> DSVHeap;
     inline D3D12_CPU_DESCRIPTOR_HANDLE DSVHandle = {};
 
+    // cbuffer things !!!
+    inline Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CBVSRVDescriptorHeap;
+    inline Microsoft::WRL::ComPtr<ID3D12Resource> CBUploadHeap;
+
     // Sync objects !!!
     inline Microsoft::WRL::ComPtr<ID3D12Fence> Fence;
     inline HANDLE FenceEvent = 0;
@@ -55,7 +60,8 @@ namespace Graphics {
     void ShutDown();
     void ResizeBuffers(unsigned int width, unsigned int height);
     void AdvanceSwapChainIndex();
-    Microsoft::WRL::ComPtr<ID3D12Resource> CreateStaticBuffer(size_t data_stride, uint32_t data_count, void* data);
+    Microsoft::WRL::ComPtr<ID3D12Resource> CreateStaticBuffer(size_t data_stride, uint32_t data_count, const void* data);
+    D3D12_GPU_DESCRIPTOR_HANDLE CBHeapFillNext(const void* data, size_t size);
 
     // Command stuff & sync
     void ResetAllocatorAndCommandList();

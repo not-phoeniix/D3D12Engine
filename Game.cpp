@@ -21,7 +21,7 @@ using namespace DirectX;
 // --------------------------------------------------------
 Game::Game() {
     CreateRootSigAndPipelineState();
-    CreateGeometry();
+    SceneInit();
 }
 
 // --------------------------------------------------------
@@ -51,26 +51,27 @@ void Game::CreateRootSigAndPipelineState() {
     }
 
     // input layout
-    const uint32_t NUM_INPUT_ELEMENTS = 2;
-    D3D12_INPUT_ELEMENT_DESC input_elements[NUM_INPUT_ELEMENTS] = {};
-    {
-        input_elements[0].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
-        input_elements[0].Format = DXGI_FORMAT_R32G32B32_FLOAT;
-        input_elements[0].SemanticName = "POSITION";
-        input_elements[0].SemanticIndex = 0;
-
-        input_elements[1].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
-        input_elements[1].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-        input_elements[1].SemanticName = "COLOR";
-        input_elements[1].SemanticIndex = 0;
-    }
+    std::vector<D3D12_INPUT_ELEMENT_DESC> input_elements = vertex_get_input_elements();
 
     // root signature
     {
+        D3D12_DESCRIPTOR_RANGE cbv_table = {};
+        cbv_table.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+        cbv_table.NumDescriptors = 1;
+        cbv_table.BaseShaderRegister = 0;
+        cbv_table.RegisterSpace = 0;
+        cbv_table.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+        D3D12_ROOT_PARAMETER root_param = {};
+        root_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        root_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+        root_param.DescriptorTable.NumDescriptorRanges = 1;
+        root_param.DescriptorTable.pDescriptorRanges = &cbv_table;
+
         D3D12_ROOT_SIGNATURE_DESC root_sig_desc = {};
         root_sig_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-        root_sig_desc.NumParameters = 0;
-        root_sig_desc.pParameters = nullptr;
+        root_sig_desc.NumParameters = 1;
+        root_sig_desc.pParameters = &root_param;
         root_sig_desc.NumStaticSamplers = 0;
         root_sig_desc.pStaticSamplers = nullptr;
 
@@ -100,8 +101,8 @@ void Game::CreateRootSigAndPipelineState() {
     {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = {};
 
-        pso_desc.InputLayout.NumElements = NUM_INPUT_ELEMENTS;
-        pso_desc.InputLayout.pInputElementDescs = input_elements;
+        pso_desc.InputLayout.NumElements = input_elements.size();
+        pso_desc.InputLayout.pInputElementDescs = input_elements.data();
         pso_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
         pso_desc.pRootSignature = root_signature.Get();
@@ -157,36 +158,20 @@ void Game::CreateRootSigAndPipelineState() {
 }
 
 // --------------------------------------------------------
-// Creates the geometry we're going to draw
+// Initializes scene objects like cameras and entities
 // --------------------------------------------------------
-void Game::CreateGeometry() {
-    XMFLOAT4 red = XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f);
-    XMFLOAT4 green = XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f);
-    XMFLOAT4 blue = XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f);
+void Game::SceneInit() {
+    camera = std::make_unique<Camera>(
+        DirectX::XMFLOAT3(0, 0, -10),
+        5,
+        0.005f,
+        XM_PIDIV2,
+        Window::AspectRatio(),
+        0.01f,
+        100.0f
+    );
 
-    std::vector<Vertex> vertices = {
-        {XMFLOAT3(+0.0f, +0.5f, +0.0f), red},
-        {XMFLOAT3(+0.5f, -0.5f, +0.0f), blue},
-        {XMFLOAT3(-0.5f, -0.5f, +0.0f), green},
-    };
-
-    std::vector<uint32_t> indices = {
-        0,
-        1,
-        2
-    };
-
-    // create buffers
-    vertex_buffer = Graphics::CreateStaticBuffer(sizeof(Vertex), (uint32_t)vertices.size(), vertices.data());
-    index_buffer = Graphics::CreateStaticBuffer(sizeof(uint32_t), (uint32_t)indices.size(), indices.data());
-
-    // set up views
-    vertex_buffer_view.StrideInBytes = sizeof(Vertex);
-    vertex_buffer_view.SizeInBytes = sizeof(Vertex) * (uint32_t)vertices.size();
-    vertex_buffer_view.BufferLocation = vertex_buffer->GetGPUVirtualAddress();
-    index_buffer_view.Format = DXGI_FORMAT_R32_UINT;
-    index_buffer_view.SizeInBytes = sizeof(uint32_t) * (uint32_t)indices.size();
-    index_buffer_view.BufferLocation = index_buffer->GetGPUVirtualAddress();
+    entities.emplace_back(Mesh::Load(FixPath("../../Assets/Meshes/cube.obj").c_str()));
 }
 
 // --------------------------------------------------------
@@ -207,6 +192,8 @@ void Game::OnResize() {
     scissor_rect.top = 0;
     scissor_rect.right = Window::Width();
     scissor_rect.bottom = Window::Height();
+
+    camera->UpdateProjectionMatrix(Window::AspectRatio());
 }
 
 // --------------------------------------------------------
@@ -216,6 +203,12 @@ void Game::Update(float deltaTime, float totalTime) {
     // Example input checking: Quit if the escape key is pressed
     if (Input::KeyDown(VK_ESCAPE))
         Window::Quit();
+
+    camera->Update(deltaTime);
+
+    for (auto& entity : entities) {
+        entity.get_transform().Rotate(0, deltaTime, 0);
+    }
 }
 
 // --------------------------------------------------------
@@ -241,12 +234,16 @@ void Game::Draw(float deltaTime, float totalTime) {
     Graphics::CommandList->RSSetScissorRects(1, &scissor_rect);
     Graphics::CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    // our buffers for geometry
-    Graphics::CommandList->IASetVertexBuffers(0, 1, &vertex_buffer_view);
-    Graphics::CommandList->IASetIndexBuffer(&index_buffer_view);
+    for (auto& entity : entities) {
+        std::shared_ptr<Mesh> mesh = entity.get_mesh();
 
-    // our actual draw :D
-    Graphics::CommandList->DrawIndexedInstanced(3, 1, 0, 0, 0);
+        D3D12_VERTEX_BUFFER_VIEW vb_view = mesh->get_vb_view();
+        Graphics::CommandList->IASetVertexBuffers(0, 1, &vb_view);
+        D3D12_INDEX_BUFFER_VIEW ib_view = mesh->get_ib_view();
+        Graphics::CommandList->IASetIndexBuffer(&ib_view);
+
+        Graphics::CommandList->DrawIndexedInstanced(mesh->get_index_count(), 1, 0, 0, 0);
+    }
 
     Present();
 }

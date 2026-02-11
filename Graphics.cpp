@@ -20,6 +20,15 @@ namespace Graphics {
         uint32_t back_buffer_index = 0;
 
         D3D_FEATURE_LEVEL featureLevel {};
+
+        // descriptor heap management
+        size_t cbvsrv_descriptor_heap_increment_size = 0;
+        uint32_t cbv_descriptor_index = 0;
+
+        // cb upload heap management
+        uint64_t cb_upload_heap_size = 0;
+        uint64_t cb_upload_heap_offset = 0;
+        void* cb_upload_heap_start = nullptr;
     }
 }
 
@@ -200,6 +209,59 @@ HRESULT Graphics::Initialize(unsigned int windowWidth, unsigned int windowHeight
     // create initial buffers at the end of setup
     ResizeBuffers(windowWidth, windowHeight);
 
+    // create ring buffer things!
+    {
+        // upload heap
+        {
+            cb_upload_heap_size = (uint64_t)MAX_CBUFFERS * 256;
+
+            D3D12_RESOURCE_DESC desc = {};
+            desc.Alignment = 0;
+            desc.DepthOrArraySize = 1;
+            desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+            desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+            desc.Format = DXGI_FORMAT_UNKNOWN;
+            desc.Width = cb_upload_heap_size,
+            desc.Height = 1; // assuming this is a regular buffer and not a tex
+            desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            desc.MipLevels = 1;
+            desc.SampleDesc.Count = 1;
+            desc.SampleDesc.Quality = 0;
+
+            D3D12_HEAP_PROPERTIES heap_props = {};
+            heap_props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+            heap_props.CreationNodeMask = 1;
+            heap_props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+            heap_props.Type = D3D12_HEAP_TYPE_UPLOAD;
+            heap_props.VisibleNodeMask = 1;
+
+            Device->CreateCommittedResource(
+                &heap_props,
+                D3D12_HEAP_FLAG_NONE,
+                &desc,
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                nullptr,
+                IID_PPV_ARGS(CBUploadHeap.GetAddressOf())
+            );
+
+            D3D12_RANGE range = {0, 0};
+            CBUploadHeap->Map(0, &range, &cb_upload_heap_start);
+        }
+
+        // descriptor heap
+        {
+            D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+            desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+            desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+            desc.NumDescriptors = MAX_CBUFFERS;
+
+            Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(CBVSRVDescriptorHeap.GetAddressOf()));
+
+            cbvsrv_descriptor_heap_increment_size =
+                (size_t)Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+        }
+    }
+
     // aaaaaand wait for all the background stuff to be done
     //   and return a thumbs up status
     WaitForGPU();
@@ -326,7 +388,7 @@ void Graphics::AdvanceSwapChainIndex() {
     back_buffer_index = (back_buffer_index + 1) % NUM_BACK_BUFFERS;
 }
 
-Microsoft::WRL::ComPtr<ID3D12Resource> Graphics::CreateStaticBuffer(size_t data_stride, uint32_t data_count, void* data) {
+Microsoft::WRL::ComPtr<ID3D12Resource> Graphics::CreateStaticBuffer(size_t data_stride, uint32_t data_count, const void* data) {
     // create local allocator and list for one-time use
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> command_allocator;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list;
@@ -419,6 +481,45 @@ Microsoft::WRL::ComPtr<ID3D12Resource> Graphics::CreateStaticBuffer(size_t data_
     // wait for work to finish and return our new buffer :D
     WaitForGPU();
     return output_buffer;
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE Graphics::CBHeapFillNext(const void* data, size_t size) {
+    // ensure multiples of 256
+    size_t reservation_size = (size + 255) / 256 * 256;
+
+    if (cb_upload_heap_offset + (uint64_t)reservation_size >= cb_upload_heap_size) {
+        cb_upload_heap_offset = 0;
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS virtual_gpu_addr =
+        CBUploadHeap->GetGPUVirtualAddress() + cb_upload_heap_offset;
+
+    // copy data to heap
+    {
+        void* dest = reinterpret_cast<void*>((char*)cb_upload_heap_start + cb_upload_heap_offset);
+        memcpy(dest, data, size);
+        cb_upload_heap_offset += (uint64_t)reservation_size;
+    }
+
+    // create a CBV for this section
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle = CBVSRVDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+        D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle = CBVSRVDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+
+        cpu_handle.ptr += ((uint64_t)cbv_descriptor_index * cbvsrv_descriptor_heap_increment_size);
+        gpu_handle.ptr += ((uint64_t)cbv_descriptor_index * cbvsrv_descriptor_heap_increment_size);
+
+        D3D12_CONSTANT_BUFFER_VIEW_DESC desc = {};
+        desc.BufferLocation = virtual_gpu_addr;
+        desc.SizeInBytes = (UINT)reservation_size;
+
+        Device->CreateConstantBufferView(&desc, cpu_handle);
+
+        cbv_descriptor_index++;
+        cbv_descriptor_index %= MAX_CBUFFERS;
+
+        return gpu_handle;
+    }
 }
 
 void Graphics::ResetAllocatorAndCommandList() {
