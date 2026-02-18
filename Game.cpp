@@ -55,30 +55,63 @@ void Game::CreateRootSigAndPipelineState() {
 
     // root signature
     {
-        D3D12_DESCRIPTOR_RANGE cbv_table = {};
-        cbv_table.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-        cbv_table.NumDescriptors = 1;
-        cbv_table.BaseShaderRegister = 0;
-        cbv_table.RegisterSpace = 0;
-        cbv_table.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+        D3D12_DESCRIPTOR_RANGE cbv_range_transform = {};
+        cbv_range_transform.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+        cbv_range_transform.NumDescriptors = 1;
+        cbv_range_transform.BaseShaderRegister = 0;
+        cbv_range_transform.RegisterSpace = 0;
+        cbv_range_transform.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-        D3D12_ROOT_PARAMETER root_param = {};
-        root_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        root_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-        root_param.DescriptorTable.NumDescriptorRanges = 1;
-        root_param.DescriptorTable.pDescriptorRanges = &cbv_table;
+        D3D12_DESCRIPTOR_RANGE cbv_range_material = {};
+        cbv_range_material.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+        cbv_range_material.NumDescriptors = 1;
+        cbv_range_material.BaseShaderRegister = 0;
+        cbv_range_material.RegisterSpace = 0;
+        cbv_range_material.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+        D3D12_ROOT_PARAMETER transform_param = {};
+        transform_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        transform_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+        transform_param.DescriptorTable.NumDescriptorRanges = 1;
+        transform_param.DescriptorTable.pDescriptorRanges = &cbv_range_transform;
+
+        D3D12_ROOT_PARAMETER material_param = {};
+        material_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        material_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        material_param.DescriptorTable.NumDescriptorRanges = 1;
+        material_param.DescriptorTable.pDescriptorRanges = &cbv_range_material;
+
+        std::vector<D3D12_ROOT_PARAMETER> root_params = {
+            transform_param,
+            material_param
+        };
+
+        D3D12_STATIC_SAMPLER_DESC aniso_wrap_sampler = {};
+        aniso_wrap_sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        aniso_wrap_sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        aniso_wrap_sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        aniso_wrap_sampler.Filter = D3D12_FILTER_ANISOTROPIC;
+        aniso_wrap_sampler.MaxAnisotropy = 16;
+        aniso_wrap_sampler.MaxLOD = D3D12_FLOAT32_MAX;
+        aniso_wrap_sampler.ShaderRegister = 0; // register(s0)
+        aniso_wrap_sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+        std::vector<D3D12_STATIC_SAMPLER_DESC> samplers = {
+            aniso_wrap_sampler
+        };
 
         D3D12_ROOT_SIGNATURE_DESC root_sig_desc = {};
-        root_sig_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-        root_sig_desc.NumParameters = 1;
-        root_sig_desc.pParameters = &root_param;
-        root_sig_desc.NumStaticSamplers = 0;
-        root_sig_desc.pStaticSamplers = nullptr;
+        root_sig_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+                              D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+        root_sig_desc.NumParameters = static_cast<UINT>(root_params.size()),
+        root_sig_desc.pParameters = root_params.data();
+        root_sig_desc.NumStaticSamplers = static_cast<UINT>(samplers.size());
+        root_sig_desc.pStaticSamplers = samplers.data();
 
         ID3DBlob* serialized_root_sig = nullptr;
         ID3DBlob* errors = nullptr;
 
-        D3D12SerializeRootSignature(
+        HRESULT result = D3D12SerializeRootSignature(
             &root_sig_desc,
             D3D_ROOT_SIGNATURE_VERSION_1,
             &serialized_root_sig,
@@ -171,13 +204,26 @@ void Game::SceneInit() {
         100.0f
     );
 
-    entities.emplace_back(Mesh::Load(FixPath("../../Assets/Meshes/cube.obj").c_str()));
+    std::shared_ptr<Material> material = std::make_shared<Material>(pipeline_state);
+    {
+        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_albedo").c_str()));
+        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_metal").c_str()));
+        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_normals").c_str()));
+        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_roughness").c_str()));
+    }
+
+    entities.emplace_back(
+        Mesh::Load(FixPath("../../Assets/Meshes/cube.obj").c_str()),
+        material
+    );
     entities.emplace_back(
         Mesh::Load(FixPath("../../Assets/Meshes/helix.obj").c_str()),
+        material,
         Transform({4.0f, 0.0f, 0.0f})
     );
     entities.emplace_back(
         Mesh::Load(FixPath("../../Assets/Meshes/sphere.obj").c_str()),
+        material,
         Transform({-4.0f, 0.0f, 0.0f})
     );
 }
@@ -245,15 +291,37 @@ void Game::Draw(float deltaTime, float totalTime) {
     Graphics::CommandList->SetDescriptorHeaps(1, Graphics::CBVSRVDescriptorHeap.GetAddressOf());
 
     for (auto& entity : entities) {
-        TransformBuffer data = {};
-        data.World = entity.get_transform().GetWorldMatrix();
-        data.View = camera->GetView();
-        data.Proj = camera->GetProjection();
-
-        D3D12_GPU_DESCRIPTOR_HANDLE handle = Graphics::CBHeapFillNext(&data, sizeof(data));
-        Graphics::CommandList->SetGraphicsRootDescriptorTable(0, handle);
-
         std::shared_ptr<Mesh> mesh = entity.get_mesh();
+        std::shared_ptr<Material> material = entity.get_material();
+
+        // transform buffer
+        {
+            TransformBuffer data = {};
+            data.world = entity.get_transform().GetWorldMatrix();
+            data.view = camera->GetView();
+            data.proj = camera->GetProjection();
+            data.wit = entity.get_transform().GetWorldInverseTransposeMatrix();
+
+            D3D12_GPU_DESCRIPTOR_HANDLE handle = Graphics::CBHeapFillNext(&data, sizeof(data));
+            Graphics::CommandList->SetGraphicsRootDescriptorTable(0, handle);
+        }
+
+        // material buffer
+        {
+            MaterialBuffer data = {};
+            uint32_t texture_count = material->get_texture_index_count();
+            memcpy(
+                data.texture_indices,
+                material->get_texture_indices(),
+                sizeof(uint32_t) * texture_count
+            );
+            data.texture_index_count = texture_count;
+
+            D3D12_GPU_DESCRIPTOR_HANDLE handle = Graphics::CBHeapFillNext(&data, sizeof(data));
+            Graphics::CommandList->SetGraphicsRootDescriptorTable(1, handle);
+        }
+
+        Graphics::CommandList->SetPipelineState(material->get_pipeline_state().Get());
 
         D3D12_VERTEX_BUFFER_VIEW vb_view = mesh->get_vb_view();
         Graphics::CommandList->IASetVertexBuffers(0, 1, &vb_view);
