@@ -14,6 +14,7 @@ namespace Graphics {
 
     constexpr uint32_t NUM_BACK_BUFFERS = 2;
     constexpr uint32_t MAX_CBUFFERS = 1000;
+    constexpr uint32_t MAX_TEXTURE_DESCRIPTORS = 100;
 
     // --- GLOBAL VARS ---
 
@@ -62,6 +63,7 @@ namespace Graphics {
     void AdvanceSwapChainIndex();
     Microsoft::WRL::ComPtr<ID3D12Resource> CreateStaticBuffer(size_t data_stride, uint32_t data_count, const void* data);
     D3D12_GPU_DESCRIPTOR_HANDLE CBHeapFillNext(const void* data, size_t size);
+    uint32_t LoadTexture(const wchar_t* file, bool generate_mips = true);
 
     // Command stuff & sync
     void ResetAllocatorAndCommandList();

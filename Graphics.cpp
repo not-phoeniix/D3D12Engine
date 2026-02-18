@@ -1,6 +1,8 @@
 #include "Graphics.h"
 #include <dxgi1_6.h>
 #include <vector>
+#include <WICTextureLoader.h>
+#include <ResourceUploadBatch.h>
 
 // Tell the drivers to use high-performance GPU in multi-GPU systems (like laptops)
 extern "C" {
@@ -29,6 +31,12 @@ namespace Graphics {
         uint64_t cb_upload_heap_size = 0;
         uint64_t cb_upload_heap_offset = 0;
         void* cb_upload_heap_start = nullptr;
+
+        // texture descriptors start AFTER the cbuffer descriptors
+        uint32_t srv_descriptor_offset = MAX_CBUFFERS;
+        // these textures will freaking die if we don't save pointers to em
+        //   (auto destruction with snart pointers)
+        std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> textures;
     }
 }
 
@@ -253,7 +261,7 @@ HRESULT Graphics::Initialize(unsigned int windowWidth, unsigned int windowHeight
             D3D12_DESCRIPTOR_HEAP_DESC desc = {};
             desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
             desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-            desc.NumDescriptors = MAX_CBUFFERS;
+            desc.NumDescriptors = MAX_CBUFFERS + MAX_TEXTURE_DESCRIPTORS;
 
             Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(CBVSRVDescriptorHeap.GetAddressOf()));
 
@@ -520,6 +528,39 @@ D3D12_GPU_DESCRIPTOR_HANDLE Graphics::CBHeapFillNext(const void* data, size_t si
 
         return gpu_handle;
     }
+}
+
+uint32_t Graphics::LoadTexture(const wchar_t* file, bool generate_mips) {
+    // create texture
+
+    DirectX::ResourceUploadBatch upload(Device.Get());
+    upload.Begin();
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> texture;
+    DirectX::CreateWICTextureFromFile(
+        Device.Get(),
+        upload,
+        file,
+        texture.GetAddressOf(),
+        generate_mips
+    );
+
+    auto finish = upload.End(CommandQueue.Get());
+    finish.wait();
+
+    // save snart pointer so it doesn't get cleaned up out of scope
+    textures.push_back(texture);
+
+    // save and incrememnt index
+    uint32_t srv_index = srv_descriptor_offset;
+    srv_descriptor_offset++;
+
+    // create SRV for our texture using our index in the heap
+    D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle = CBVSRVDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    cpu_handle.ptr += ((size_t)srv_index * cbvsrv_descriptor_heap_increment_size);
+    Device->CreateShaderResourceView(texture.Get(), nullptr, cpu_handle);
+
+    return srv_index;
 }
 
 void Graphics::ResetAllocatorAndCommandList() {
