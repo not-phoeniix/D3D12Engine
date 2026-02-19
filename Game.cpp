@@ -328,7 +328,7 @@ void Game::Draw(float deltaTime, float totalTime) {
             MaterialBuffer data = {};
             uint32_t texture_count = material->get_texture_index_count();
             memcpy(
-                data.texture_indices,
+                data.packed_texture_indices,
                 material->get_texture_indices(),
                 sizeof(uint32_t) * texture_count
             );
