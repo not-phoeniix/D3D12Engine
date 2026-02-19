@@ -23,7 +23,7 @@ namespace Graphics {
     inline Microsoft::WRL::ComPtr<IDXGISwapChain> SwapChain;
 
     // Command stuff!
-    inline Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandAllocator;
+    inline Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CommandAllocators[NUM_BACK_BUFFERS];
     inline Microsoft::WRL::ComPtr<ID3D12CommandQueue> CommandQueue;
     inline Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> CommandList;
 
@@ -42,9 +42,12 @@ namespace Graphics {
     inline Microsoft::WRL::ComPtr<ID3D12Resource> CBUploadHeap;
 
     // Sync objects !!!
-    inline Microsoft::WRL::ComPtr<ID3D12Fence> Fence;
-    inline HANDLE FenceEvent = 0;
-    inline uint64_t FenceCounter = 0;
+    inline Microsoft::WRL::ComPtr<ID3D12Fence> WaitFence;
+    inline HANDLE WaitFenceEvent = 0;
+    inline uint64_t WaitFenceCounter = 0;
+    inline Microsoft::WRL::ComPtr<ID3D12Fence> FrameFence;
+    inline HANDLE FrameFenceEvent = 0;
+    inline uint64_t FrameFenceCounters[NUM_BACK_BUFFERS] = {};
 
     // Debug Layer
     inline Microsoft::WRL::ComPtr<ID3D12InfoQueue> InfoQueue;
@@ -67,7 +70,7 @@ namespace Graphics {
     uint32_t LoadTexture(const wchar_t* file, bool generate_mips = true);
 
     // Command stuff & sync
-    void ResetAllocatorAndCommandList();
+    void ResetAllocatorAndCommandList(uint32_t index);
     void CloseAndExecuteCommandList();
     void WaitForGPU();
 

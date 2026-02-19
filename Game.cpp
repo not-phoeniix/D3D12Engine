@@ -288,24 +288,26 @@ void Game::Draw(float deltaTime, float totalTime) {
 
     // our actual rendering things happen between clearing and presenting !!!!!
 
-    Graphics::CommandList->SetGraphicsRootSignature(root_signature.Get());
+    auto command_list = Graphics::CommandList;
+
+    command_list->SetGraphicsRootSignature(root_signature.Get());
 
     // set parameters & objects & references & etc for upcoming draw
-    Graphics::CommandList->OMSetRenderTargets(
+    command_list->OMSetRenderTargets(
         1,
         &Graphics::RTVHandles[Graphics::get_swap_chain_index()],
         true,
         &Graphics::DSVHandle
     );
-    Graphics::CommandList->RSSetViewports(1, &viewport);
-    Graphics::CommandList->RSSetScissorRects(1, &scissor_rect);
-    Graphics::CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    command_list->RSSetViewports(1, &viewport);
+    command_list->RSSetScissorRects(1, &scissor_rect);
+    command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    Graphics::CommandList->SetDescriptorHeaps(1, Graphics::CBVSRVDescriptorHeap.GetAddressOf());
+    command_list->SetDescriptorHeaps(1, Graphics::CBVSRVDescriptorHeap.GetAddressOf());
 
     // make sure to actually set the descriptor table for the start of the
     //   texture partition of the descriptor heap
-    Graphics::CommandList->SetGraphicsRootDescriptorTable(2, Graphics::get_texture_heap_handle());
+    command_list->SetGraphicsRootDescriptorTable(2, Graphics::get_texture_heap_handle());
 
     for (auto& entity : entities) {
         std::shared_ptr<Mesh> mesh = entity.get_mesh();
@@ -320,7 +322,7 @@ void Game::Draw(float deltaTime, float totalTime) {
             data.wit = entity.get_transform().GetWorldInverseTransposeMatrix();
 
             D3D12_GPU_DESCRIPTOR_HANDLE handle = Graphics::CBHeapFillNext(&data, sizeof(data));
-            Graphics::CommandList->SetGraphicsRootDescriptorTable(0, handle);
+            command_list->SetGraphicsRootDescriptorTable(0, handle);
         }
 
         // material buffer
@@ -335,17 +337,17 @@ void Game::Draw(float deltaTime, float totalTime) {
             data.texture_index_count = texture_count;
 
             D3D12_GPU_DESCRIPTOR_HANDLE handle = Graphics::CBHeapFillNext(&data, sizeof(data));
-            Graphics::CommandList->SetGraphicsRootDescriptorTable(1, handle);
+            command_list->SetGraphicsRootDescriptorTable(1, handle);
         }
 
-        Graphics::CommandList->SetPipelineState(material->get_pipeline_state().Get());
+        command_list->SetPipelineState(material->get_pipeline_state().Get());
 
         D3D12_VERTEX_BUFFER_VIEW vb_view = mesh->get_vb_view();
-        Graphics::CommandList->IASetVertexBuffers(0, 1, &vb_view);
+        command_list->IASetVertexBuffers(0, 1, &vb_view);
         D3D12_INDEX_BUFFER_VIEW ib_view = mesh->get_ib_view();
-        Graphics::CommandList->IASetIndexBuffer(&ib_view);
+        command_list->IASetIndexBuffer(&ib_view);
 
-        Graphics::CommandList->DrawIndexedInstanced(mesh->get_index_count(), 1, 0, 0, 0);
+        command_list->DrawIndexedInstanced(mesh->get_index_count(), 1, 0, 0, 0);
     }
 
     Present();
@@ -353,6 +355,7 @@ void Game::Draw(float deltaTime, float totalTime) {
 
 void Game::ClearPrevFrame() {
     auto current_back_buffer = Graphics::BackBuffers[Graphics::get_swap_chain_index()];
+    auto command_list = Graphics::CommandList;
 
     // transition layout from present to render target layout
     D3D12_RESOURCE_BARRIER rb = {};
@@ -362,12 +365,12 @@ void Game::ClearPrevFrame() {
     rb.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
     rb.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     rb.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    Graphics::CommandList->ResourceBarrier(1, &rb);
+    command_list->ResourceBarrier(1, &rb);
 
     // clear main render target
     // CORNFLOWER BLUE IS BACK!!!!! oh how i miss you monogame
     float color[] = {0.4f, 0.6f, 0.75f, 1.0f};
-    Graphics::CommandList->ClearRenderTargetView(
+    command_list->ClearRenderTargetView(
         Graphics::RTVHandles[Graphics::get_swap_chain_index()],
         color,
         0,      // no scissor rects
@@ -375,7 +378,7 @@ void Game::ClearPrevFrame() {
     );
 
     // clear depth buffer
-    Graphics::CommandList->ClearDepthStencilView(
+    command_list->ClearDepthStencilView(
         Graphics::DSVHandle,
         D3D12_CLEAR_FLAG_DEPTH,
         1.0f,   // clear depth @ 1.0f (max)
@@ -387,6 +390,7 @@ void Game::ClearPrevFrame() {
 
 void Game::Present() {
     auto current_back_buffer = Graphics::BackBuffers[Graphics::get_swap_chain_index()];
+    auto command_list = Graphics::CommandList;
 
     // transition back to present state
     D3D12_RESOURCE_BARRIER rb = {};
@@ -396,7 +400,7 @@ void Game::Present() {
     rb.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     rb.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
     rb.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    Graphics::CommandList->ResourceBarrier(1, &rb);
+    command_list->ResourceBarrier(1, &rb);
 
     // IMPORTANT!!!!! actually execute our list <3
     Graphics::CloseAndExecuteCommandList();
@@ -410,7 +414,6 @@ void Game::Present() {
 
     // finalize things and prepare for next frame
     Graphics::AdvanceSwapChainIndex();
-    Graphics::WaitForGPU();
-    Graphics::ResetAllocatorAndCommandList();
+    Graphics::ResetAllocatorAndCommandList(Graphics::get_swap_chain_index());
 }
 

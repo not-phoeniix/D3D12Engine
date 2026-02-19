@@ -140,11 +140,13 @@ HRESULT Graphics::Initialize(unsigned int windowWidth, unsigned int windowHeight
 
     // COMMAND ALLOCATORS AND QUEUES AND POOLS AND oh wait pools are vulkan nvm
     {
-        // allocator
-        Device->CreateCommandAllocator(
-            D3D12_COMMAND_LIST_TYPE_DIRECT,
-            IID_PPV_ARGS(CommandAllocator.GetAddressOf())
-        );
+        // allocators
+        for (uint32_t i = 0; i < NUM_BACK_BUFFERS; i++) {
+            Device->CreateCommandAllocator(
+                D3D12_COMMAND_LIST_TYPE_DIRECT,
+                IID_PPV_ARGS(CommandAllocators[i].GetAddressOf())
+            );
+        }
 
         // queue
         D3D12_COMMAND_QUEUE_DESC queue_desc = {};
@@ -158,7 +160,7 @@ HRESULT Graphics::Initialize(unsigned int windowWidth, unsigned int windowHeight
         Device->CreateCommandList(
             0,                              // which GPU will this be attached to (0 for single GPU setup)
             D3D12_COMMAND_LIST_TYPE_DIRECT, // type of list to make
-            CommandAllocator.Get(),         // allocator to allocate commands in !!!
+            CommandAllocators[0].Get(),         // allocator to allocate commands in !!!
             nullptr,                        // pipeline state (we don't have one yet <3)
             IID_PPV_ARGS(CommandList.GetAddressOf())
         );
@@ -197,9 +199,13 @@ HRESULT Graphics::Initialize(unsigned int windowWidth, unsigned int windowHeight
 
     // create sync things !!!
     {
-        Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(Fence.GetAddressOf()));
-        FenceEvent = CreateEventEx(0, 0, 0, EVENT_ALL_ACCESS);
-        FenceCounter = 0;
+        Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(WaitFence.GetAddressOf()));
+        WaitFenceEvent = CreateEventEx(0, 0, 0, EVENT_ALL_ACCESS);
+        WaitFenceCounter = 0;
+
+        Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(FrameFence.GetAddressOf()));
+        FrameFenceEvent = CreateEventEx(0, 0, 0, EVENT_ALL_ACCESS);
+        memset(FrameFenceCounters, 0, sizeof(FrameFenceCounters));
     }
 
     // we're done with all the basic API stuff
@@ -402,7 +408,21 @@ void Graphics::ResizeBuffers(unsigned int width, unsigned int height) {
 }
 
 void Graphics::AdvanceSwapChainIndex() {
+    // signal current fence value!
+    uint64_t current_fence_counter = FrameFenceCounters[back_buffer_index];
+    CommandQueue->Signal(FrameFence.Get(), current_fence_counter);
+
+    // get next index
     back_buffer_index = (back_buffer_index + 1) % NUM_BACK_BUFFERS;
+
+    // wait for next frame to be done if necessary
+    if (FrameFence->GetCompletedValue() < FrameFenceCounters[back_buffer_index]) {
+        FrameFence->SetEventOnCompletion(FrameFenceCounters[back_buffer_index], FrameFenceEvent);
+        WaitForSingleObject(FrameFenceEvent, INFINITE);
+    }
+
+    // update the counter since we know the frame is done waiting by now!
+    FrameFenceCounters[back_buffer_index] = current_fence_counter + 1;
 }
 
 Microsoft::WRL::ComPtr<ID3D12Resource> Graphics::CreateStaticBuffer(size_t data_stride, uint32_t data_count, const void* data) {
@@ -575,9 +595,9 @@ uint32_t Graphics::LoadTexture(const wchar_t* file, bool generate_mips) {
     // return srv_index;
 }
 
-void Graphics::ResetAllocatorAndCommandList() {
-    CommandAllocator->Reset();
-    CommandList->Reset(CommandAllocator.Get(), nullptr);
+void Graphics::ResetAllocatorAndCommandList(uint32_t index) {
+    CommandAllocators[index]->Reset();
+    CommandList->Reset(CommandAllocators[index].Get(), nullptr);
 }
 
 void Graphics::CloseAndExecuteCommandList() {
@@ -587,12 +607,12 @@ void Graphics::CloseAndExecuteCommandList() {
 }
 
 void Graphics::WaitForGPU() {
-    FenceCounter++;
-    CommandQueue->Signal(Fence.Get(), FenceCounter);
+    WaitFenceCounter++;
+    CommandQueue->Signal(WaitFence.Get(), WaitFenceCounter);
 
-    if (Fence->GetCompletedValue() < FenceCounter) {
-        Fence->SetEventOnCompletion(FenceCounter, FenceEvent);
-        WaitForSingleObject(FenceEvent, INFINITE);
+    if (WaitFence->GetCompletedValue() < WaitFenceCounter) {
+        WaitFence->SetEventOnCompletion(WaitFenceCounter, WaitFenceEvent);
+        WaitForSingleObject(WaitFenceEvent, INFINITE);
     }
 }
 
