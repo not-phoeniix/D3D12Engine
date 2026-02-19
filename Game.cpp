@@ -303,6 +303,8 @@ void Game::Draw(float deltaTime, float totalTime) {
 
     Graphics::CommandList->SetDescriptorHeaps(1, Graphics::CBVSRVDescriptorHeap.GetAddressOf());
 
+    // make sure to actually set the descriptor table for the start of the
+    //   texture partition of the descriptor heap
     Graphics::CommandList->SetGraphicsRootDescriptorTable(2, Graphics::get_texture_heap_handle());
 
     for (auto& entity : entities) {
