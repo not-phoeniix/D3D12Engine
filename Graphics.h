@@ -55,6 +55,7 @@ namespace Graphics {
     bool get_vsync_state();
     std::wstring get_api_name();
     uint32_t get_swap_chain_index();
+    D3D12_GPU_DESCRIPTOR_HANDLE get_texture_heap_handle();
 
     // General functions
     HRESULT Initialize(unsigned int windowWidth, unsigned int windowHeight, HWND windowHandle, bool vsyncIfPossible);

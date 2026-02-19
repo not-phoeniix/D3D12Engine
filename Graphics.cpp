@@ -37,6 +37,7 @@ namespace Graphics {
         // these textures will freaking die if we don't save pointers to em
         //   (auto destruction with snart pointers)
         std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> textures;
+        D3D12_GPU_DESCRIPTOR_HANDLE texture_heap_handle;
     }
 }
 
@@ -57,6 +58,10 @@ std::wstring Graphics::get_api_name() {
 
 uint32_t Graphics::get_swap_chain_index() {
     return back_buffer_index;
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE Graphics::get_texture_heap_handle() {
+    return texture_heap_handle;
 }
 
 // --------------------------------------------------------
@@ -267,6 +272,10 @@ HRESULT Graphics::Initialize(unsigned int windowWidth, unsigned int windowHeight
 
             cbvsrv_descriptor_heap_increment_size =
                 (size_t)Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+            // save the unchanging pointer to the start of our partition for our texture descriptors
+            texture_heap_handle = CBVSRVDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+            texture_heap_handle.ptr += ((size_t)MAX_CBUFFERS * cbvsrv_descriptor_heap_increment_size);
         }
     }
 
@@ -560,7 +569,10 @@ uint32_t Graphics::LoadTexture(const wchar_t* file, bool generate_mips) {
     cpu_handle.ptr += ((size_t)srv_index * cbvsrv_descriptor_heap_increment_size);
     Device->CreateShaderResourceView(texture.Get(), nullptr, cpu_handle);
 
-    return srv_index;
+    // index on GPU starts at zero since we're only
+    //   binding a particular portion of it
+    return srv_index - MAX_CBUFFERS;
+    // return srv_index;
 }
 
 void Graphics::ResetAllocatorAndCommandList() {

@@ -62,6 +62,12 @@ void Game::CreateRootSigAndPipelineState() {
         cbv_range_transform.RegisterSpace = 0;
         cbv_range_transform.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
+        D3D12_ROOT_PARAMETER transform_param = {};
+        transform_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        transform_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+        transform_param.DescriptorTable.NumDescriptorRanges = 1;
+        transform_param.DescriptorTable.pDescriptorRanges = &cbv_range_transform;
+
         D3D12_DESCRIPTOR_RANGE cbv_range_material = {};
         cbv_range_material.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
         cbv_range_material.NumDescriptors = 1;
@@ -69,21 +75,29 @@ void Game::CreateRootSigAndPipelineState() {
         cbv_range_material.RegisterSpace = 0;
         cbv_range_material.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-        D3D12_ROOT_PARAMETER transform_param = {};
-        transform_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        transform_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-        transform_param.DescriptorTable.NumDescriptorRanges = 1;
-        transform_param.DescriptorTable.pDescriptorRanges = &cbv_range_transform;
-
         D3D12_ROOT_PARAMETER material_param = {};
         material_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
         material_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
         material_param.DescriptorTable.NumDescriptorRanges = 1;
         material_param.DescriptorTable.pDescriptorRanges = &cbv_range_material;
 
+        D3D12_DESCRIPTOR_RANGE texture_heap_range = {};
+        texture_heap_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+        texture_heap_range.NumDescriptors = Graphics::MAX_TEXTURE_DESCRIPTORS;
+        texture_heap_range.BaseShaderRegister = 0;
+        texture_heap_range.RegisterSpace = 1;
+        texture_heap_range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+        D3D12_ROOT_PARAMETER texture_heap_param = {};
+        texture_heap_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        texture_heap_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        texture_heap_param.DescriptorTable.NumDescriptorRanges = 1;
+        texture_heap_param.DescriptorTable.pDescriptorRanges = &texture_heap_range;
+
         std::vector<D3D12_ROOT_PARAMETER> root_params = {
             transform_param,
-            material_param
+            material_param,
+            texture_heap_param
         };
 
         D3D12_STATIC_SAMPLER_DESC aniso_wrap_sampler = {};
@@ -104,14 +118,10 @@ void Game::CreateRootSigAndPipelineState() {
         // root_sig_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
         //                       D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
         root_sig_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-        // root_sig_desc.NumParameters = static_cast<UINT>(root_params.size()),
-        root_sig_desc.NumParameters = 1;
-        // root_sig_desc.pParameters = root_params.data();
-        root_sig_desc.pParameters = &transform_param;
-        // root_sig_desc.NumStaticSamplers = static_cast<UINT>(samplers.size());
-        root_sig_desc.NumStaticSamplers = 0;
-        // root_sig_desc.pStaticSamplers = samplers.data();
-        root_sig_desc.pStaticSamplers = nullptr;
+        root_sig_desc.NumParameters = static_cast<UINT>(root_params.size());
+        root_sig_desc.pParameters = root_params.data();
+        root_sig_desc.NumStaticSamplers = static_cast<UINT>(samplers.size());
+        root_sig_desc.pStaticSamplers = samplers.data();
 
         ID3DBlob* serialized_root_sig = nullptr;
         ID3DBlob* errors = nullptr;
@@ -292,6 +302,8 @@ void Game::Draw(float deltaTime, float totalTime) {
     Graphics::CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     Graphics::CommandList->SetDescriptorHeaps(1, Graphics::CBVSRVDescriptorHeap.GetAddressOf());
+
+    Graphics::CommandList->SetGraphicsRootDescriptorTable(2, Graphics::get_texture_heap_handle());
 
     for (auto& entity : entities) {
         std::shared_ptr<Mesh> mesh = entity.get_mesh();
