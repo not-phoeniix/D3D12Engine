@@ -101,12 +101,17 @@ void Game::CreateRootSigAndPipelineState() {
         };
 
         D3D12_ROOT_SIGNATURE_DESC root_sig_desc = {};
-        root_sig_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-                              D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
-        root_sig_desc.NumParameters = static_cast<UINT>(root_params.size()),
-        root_sig_desc.pParameters = root_params.data();
-        root_sig_desc.NumStaticSamplers = static_cast<UINT>(samplers.size());
-        root_sig_desc.pStaticSamplers = samplers.data();
+        // root_sig_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+        //                       D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+        root_sig_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+        // root_sig_desc.NumParameters = static_cast<UINT>(root_params.size()),
+        root_sig_desc.NumParameters = 1;
+        // root_sig_desc.pParameters = root_params.data();
+        root_sig_desc.pParameters = &transform_param;
+        // root_sig_desc.NumStaticSamplers = static_cast<UINT>(samplers.size());
+        root_sig_desc.NumStaticSamplers = 0;
+        // root_sig_desc.pStaticSamplers = samplers.data();
+        root_sig_desc.pStaticSamplers = nullptr;
 
         ID3DBlob* serialized_root_sig = nullptr;
         ID3DBlob* errors = nullptr;
@@ -206,10 +211,10 @@ void Game::SceneInit() {
 
     std::shared_ptr<Material> material = std::make_shared<Material>(pipeline_state);
     {
-        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_albedo").c_str()));
-        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_metal").c_str()));
-        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_normals").c_str()));
-        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_roughness").c_str()));
+        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_albedo.png").c_str()));
+        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_metal.png").c_str()));
+        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_normals.png").c_str()));
+        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_roughness.png").c_str()));
     }
 
     entities.emplace_back(
@@ -273,8 +278,6 @@ void Game::Draw(float deltaTime, float totalTime) {
 
     // our actual rendering things happen between clearing and presenting !!!!!
 
-    // set up states
-    Graphics::CommandList->SetPipelineState(pipeline_state.Get());
     Graphics::CommandList->SetGraphicsRootSignature(root_signature.Get());
 
     // set parameters & objects & references & etc for upcoming draw

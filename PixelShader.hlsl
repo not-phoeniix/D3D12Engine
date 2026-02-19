@@ -8,11 +8,9 @@ cbuffer MaterialData : register(b0) {
 	uint texture_count;
 }
 
-SamplerState Sampler : register(s0);
-
 float4 main(VertexToPixel input) : SV_TARGET {
-	Texture2D albedo = ResourceDescriptorHeap[texture_indices[0]];
-	float4 color = albedo.Sample(Sampler, input.uv);
+	// Texture2D albedo = ResourceDescriptorHeap[texture_indices[0]];
+	// float4 color = albedo.Sample(Sampler, input.uv);
 
-	return color;
+	return float4(1.0f, 1.0f, 1.0f, 1.0f);
 }
