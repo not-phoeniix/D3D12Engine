@@ -6,7 +6,7 @@
 #include "GameEntity.h"
 #include "Light.h"
 
-constexpr float GAME_GAMMA = 2.2f;
+constexpr float GAME_GAMMA = 1.4f;
 
 class Game {
    public:
@@ -26,6 +26,8 @@ class Game {
     void SceneInit();
     void ClearPrevFrame();
     void Present();
+    
+    void RandomizeLights();
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline_state;

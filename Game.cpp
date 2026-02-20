@@ -7,6 +7,7 @@
 #include <vector>
 #include "BufferStructs.h"
 #include <DirectXMath.h>
+#include <cstdlib>
 
 // Needed for a helper function to load pre-compiled shader files
 #pragma comment(lib, "d3dcompiler.lib")
@@ -14,6 +15,10 @@
 
 // For the DirectX Math library
 using namespace DirectX;
+
+static float randf_range(float min, float max) {
+    return min + ((max - min) * ((rand() / (float)RAND_MAX)));
+}
 
 // --------------------------------------------------------
 // The constructor is called after the window and graphics API
@@ -218,14 +223,7 @@ void Game::SceneInit() {
         100.0f
     );
 
-    lights.resize(1);
-    {
-        lights[0] = {};
-        lights[0].type = LIGHT_TYPE_DIRECTIONAL;
-        lights[0].direction = {2.0f, -5.0f, 1.0f};
-        lights[0].intensity = 1.0f;
-        lights[0].color = {1.0f, 1.0f, 1.0f};
-    }
+    RandomizeLights();
 
     std::shared_ptr<Material> material = std::make_shared<Material>(pipeline_state);
     {
@@ -293,6 +291,10 @@ void Game::Update(float deltaTime, float totalTime) {
 // --------------------------------------------------------
 void Game::Draw(float deltaTime, float totalTime) {
     ClearPrevFrame();
+    
+    if (Input::KeyPress(VK_SPACE)) {
+        RandomizeLights();
+    }
 
     // our actual rendering things happen between clearing and presenting !!!!!
 
@@ -390,8 +392,7 @@ void Game::ClearPrevFrame() {
     command_list->ResourceBarrier(1, &rb);
 
     // clear main render target
-    // CORNFLOWER BLUE IS BACK!!!!! oh how i miss you monogame
-    float color[] = {0.4f, 0.6f, 0.75f, 1.0f};
+    float color[] = {0.0f, 0.0f, 0.0f, 1.0f};
     command_list->ClearRenderTargetView(
         Graphics::RTVHandles[Graphics::get_swap_chain_index()],
         color,
@@ -437,5 +438,33 @@ void Game::Present() {
     // finalize things and prepare for next frame
     Graphics::AdvanceSwapChainIndex();
     Graphics::ResetAllocatorAndCommandList(Graphics::get_swap_chain_index());
+}
+
+void Game::RandomizeLights() {
+    // randomize lights
+    lights.resize(10);
+    for (size_t i = 0; i < lights.size(); i++) {
+        // rand type either 0, 1, 2
+        lights[i].type = static_cast<uint32_t>(randf_range(0.0f, 2.999f));
+        lights[i].range = randf_range(10.0f, 100.0f);
+        lights[i].position = {
+            randf_range(-50.0f, 50.0f),
+            randf_range(-50.0f, 50.0f),
+            randf_range(-50.0f, 50.0f)
+        };
+        // make all lights face towards the center
+        DirectX::XMStoreFloat3(
+            &lights[i].direction,
+            DirectX::XMLoadFloat3(&lights[i].position) * -1.0f
+        );
+        lights[i].color = {
+            randf_range(0.0f, 1.0f),
+            randf_range(0.0f, 1.0f),
+            randf_range(0.0f, 1.0f)
+        };
+        lights[i].spot_inner_angle = randf_range(0.0f, 2.0f);
+        lights[i].spot_outer_angle = randf_range(0.0f, 2.0f);
+        lights[i].intensity = randf_range(0.1f, 2.0f);
+    }
 }
 

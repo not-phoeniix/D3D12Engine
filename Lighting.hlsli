@@ -186,12 +186,49 @@ float3 LightDirectionalPBR(Light light, PSInput input, float3 camera_world_pos, 
     return (balanced_diffuse * surface_color + specular) * light.intensity * light.color;
 }
 
-float3 LightPointPBR(Light light, PSInput input, float roughness, float3 specular_color, float metalness, float3 surface_color) {
-    return float3(0.0, 0.0, 0.0);
+float3 LightPointPBR(Light light, PSInput input, float3 camera_world_pos, float roughness, float3 specular_color, float metalness, float3 surface_color) {
+	float3 to_cam = normalize(camera_world_pos - input.world_pos);
+    float3 to_light = normalize(light.position - input.world_pos);
+
+    float atten = Attenuate(light, input.world_pos);
+    float diffuse = DiffusePBR(input.normal, to_light);
+    float3 f_out;
+    float3 specular = MicrofacetBRDF(
+		input.normal, 
+		to_light, 
+		to_cam, 
+		roughness, 
+		specular_color, 
+		f_out
+	);
+
+	// calculate diffuse with energy conservation!
+	float3 balanced_diffuse = DiffuseEnergyConserve(diffuse, f_out, metalness);
+
+	// combine final diffuse and specular values with other light properties!
+    return (balanced_diffuse * surface_color + specular) * atten * light.intensity * light.color;
 }
 
-float3 LightSpotPBR(Light light, PSInput input, float roughness, float3 specular_color, float metalness, float3 surface_color) {
-    return float3(0.0, 0.0, 0.0);
+float3 LightSpotPBR(Light light, PSInput input, float3 camera_world_pos, float roughness, float3 specular_color, float metalness, float3 surface_color) {
+    float3 to_light = normalize(light.position - input.world_pos);
+
+    float pixel_angle = saturate(dot(to_light, -light.direction));
+
+    float cos_inner = cos(light.spot_inner_angle);
+    float cos_outer = cos(max(light.spot_outer_angle, light.spot_inner_angle + 0.001));
+    float falloff_range = cos_outer - cos_inner;
+
+    float spot_term = saturate((cos_outer - pixel_angle) / falloff_range);
+
+	return LightPointPBR(
+        light, 
+        input, 
+        camera_world_pos, 
+        roughness, 
+        specular_color, 
+        metalness, 
+        surface_color
+    ) * spot_term;
 }
 
 #endif

@@ -63,12 +63,6 @@ float4 main(PSInput input) : SV_TARGET {
 	float3 specular_color = lerp(F0_NON_METAL.rrr, surface_color.rgb, metalness);
 
 	float3 total_light = float3(0.0, 0.0, 0.0);
-	
-	Light light;
-	light.type = 0;
-	light.direction = normalize(float3(1.0, -5.0, 2.0));
-	light.color = float3(1.0, 1.0, 1.0);
-	light.intensity = 1.0;
 
 	uint light_iterations = min(light_count, MAX_LIGHTS);
 	for (uint i = 0; i < light_iterations; i++) {
@@ -78,6 +72,12 @@ float4 main(PSInput input) : SV_TARGET {
 		switch (light.type) {
 			case LIGHT_TYPE_DIRECTIONAL:
 				total_light += LightDirectionalPBR(light, input, camera_world_pos, roughness, specular_color, metalness, surface_color);
+				break;
+			case LIGHT_TYPE_POINT:
+				total_light += LightPointPBR(light, input, camera_world_pos, roughness, specular_color, metalness, surface_color);
+				break;
+			case LIGHT_TYPE_SPOT:
+				total_light += LightSpotPBR(light, input, camera_world_pos, roughness, specular_color, metalness, surface_color);
 				break;
 		}
 	}
