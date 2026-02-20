@@ -81,23 +81,9 @@ void Game::CreateRootSigAndPipelineState() {
         material_param.DescriptorTable.NumDescriptorRanges = 1;
         material_param.DescriptorTable.pDescriptorRanges = &cbv_range_material;
 
-        D3D12_DESCRIPTOR_RANGE texture_heap_range = {};
-        texture_heap_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-        texture_heap_range.NumDescriptors = Graphics::MAX_TEXTURE_DESCRIPTORS;
-        texture_heap_range.BaseShaderRegister = 0;
-        texture_heap_range.RegisterSpace = 1;
-        texture_heap_range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-        D3D12_ROOT_PARAMETER texture_heap_param = {};
-        texture_heap_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        texture_heap_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-        texture_heap_param.DescriptorTable.NumDescriptorRanges = 1;
-        texture_heap_param.DescriptorTable.pDescriptorRanges = &texture_heap_range;
-
         std::vector<D3D12_ROOT_PARAMETER> root_params = {
             transform_param,
-            material_param,
-            texture_heap_param
+            material_param
         };
 
         D3D12_STATIC_SAMPLER_DESC aniso_wrap_sampler = {};
@@ -115,9 +101,8 @@ void Game::CreateRootSigAndPipelineState() {
         };
 
         D3D12_ROOT_SIGNATURE_DESC root_sig_desc = {};
-        // root_sig_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-        //                       D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
-        root_sig_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+        root_sig_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+                              D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
         root_sig_desc.NumParameters = static_cast<UINT>(root_params.size());
         root_sig_desc.pParameters = root_params.data();
         root_sig_desc.NumStaticSamplers = static_cast<UINT>(samplers.size());
@@ -290,6 +275,7 @@ void Game::Draw(float deltaTime, float totalTime) {
 
     auto command_list = Graphics::CommandList;
 
+    command_list->SetDescriptorHeaps(1, Graphics::CBVSRVDescriptorHeap.GetAddressOf());
     command_list->SetGraphicsRootSignature(root_signature.Get());
 
     // set parameters & objects & references & etc for upcoming draw
@@ -302,12 +288,6 @@ void Game::Draw(float deltaTime, float totalTime) {
     command_list->RSSetViewports(1, &viewport);
     command_list->RSSetScissorRects(1, &scissor_rect);
     command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-    command_list->SetDescriptorHeaps(1, Graphics::CBVSRVDescriptorHeap.GetAddressOf());
-
-    // make sure to actually set the descriptor table for the start of the
-    //   texture partition of the descriptor heap
-    command_list->SetGraphicsRootDescriptorTable(2, Graphics::get_texture_heap_handle());
 
     for (auto& entity : entities) {
         std::shared_ptr<Mesh> mesh = entity.get_mesh();

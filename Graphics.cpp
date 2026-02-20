@@ -4,10 +4,15 @@
 #include <WICTextureLoader.h>
 #include <ResourceUploadBatch.h>
 
-// Tell the drivers to use high-performance GPU in multi-GPU systems (like laptops)
+// DLL settings!
 extern "C" {
+// Tell the drivers to use high-performance GPU in multi-GPU systems (like laptops)
 __declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;       // NVIDIA
 __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1; // AMD
+
+// Set up agility SDK parameters
+__declspec(dllexport) extern const UINT D3D12SDKVersion = 618;
+__declspec(dllexport) extern const char* D3D12SDKPath = ".\\D3D12\\";
 }
 
 namespace Graphics {
@@ -37,7 +42,6 @@ namespace Graphics {
         // these textures will freaking die if we don't save pointers to em
         //   (auto destruction with snart pointers)
         std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> textures;
-        D3D12_GPU_DESCRIPTOR_HANDLE texture_heap_handle;
     }
 }
 
@@ -58,10 +62,6 @@ std::wstring Graphics::get_api_name() {
 
 uint32_t Graphics::get_swap_chain_index() {
     return back_buffer_index;
-}
-
-D3D12_GPU_DESCRIPTOR_HANDLE Graphics::get_texture_heap_handle() {
-    return texture_heap_handle;
 }
 
 // --------------------------------------------------------
@@ -160,7 +160,7 @@ HRESULT Graphics::Initialize(unsigned int windowWidth, unsigned int windowHeight
         Device->CreateCommandList(
             0,                              // which GPU will this be attached to (0 for single GPU setup)
             D3D12_COMMAND_LIST_TYPE_DIRECT, // type of list to make
-            CommandAllocators[0].Get(),         // allocator to allocate commands in !!!
+            CommandAllocators[0].Get(),     // allocator to allocate commands in !!!
             nullptr,                        // pipeline state (we don't have one yet <3)
             IID_PPV_ARGS(CommandList.GetAddressOf())
         );
@@ -278,10 +278,6 @@ HRESULT Graphics::Initialize(unsigned int windowWidth, unsigned int windowHeight
 
             cbvsrv_descriptor_heap_increment_size =
                 (size_t)Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-            // save the unchanging pointer to the start of our partition for our texture descriptors
-            texture_heap_handle = CBVSRVDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
-            texture_heap_handle.ptr += ((size_t)MAX_CBUFFERS * cbvsrv_descriptor_heap_increment_size);
         }
     }
 
@@ -589,10 +585,7 @@ uint32_t Graphics::LoadTexture(const wchar_t* file, bool generate_mips) {
     cpu_handle.ptr += ((size_t)srv_index * cbvsrv_descriptor_heap_increment_size);
     Device->CreateShaderResourceView(texture.Get(), nullptr, cpu_handle);
 
-    // index on GPU starts at zero since we're only
-    //   binding a particular portion of it
-    return srv_index - MAX_CBUFFERS;
-    // return srv_index;
+    return srv_index;
 }
 
 void Graphics::ResetAllocatorAndCommandList(uint32_t index) {
