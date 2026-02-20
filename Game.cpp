@@ -225,26 +225,44 @@ void Game::SceneInit() {
 
     RandomizeLights();
 
-    std::shared_ptr<Material> material = std::make_shared<Material>(pipeline_state);
+    std::shared_ptr<Material> mat_bronze = std::make_shared<Material>(pipeline_state);
     {
-        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_albedo.png").c_str()));
-        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_metal.png").c_str()));
-        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_normals.png").c_str()));
-        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_roughness.png").c_str()));
+        mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_albedo.png").c_str()));
+        mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_metal.png").c_str()));
+        mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_normals.png").c_str()));
+        mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_roughness.png").c_str()));
+    }
+
+    std::shared_ptr<Material> mat_cobblestone = std::make_shared<Material>(pipeline_state);
+    {
+        mat_cobblestone->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_albedo.png").c_str()));
+        mat_cobblestone->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_metal.png").c_str()));
+        mat_cobblestone->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_normals.png").c_str()));
+        mat_cobblestone->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_roughness.png").c_str()));
+        mat_cobblestone->set_uv_scale({0.25f, 0.25f});
+    }
+
+    std::shared_ptr<Material> mat_floor = std::make_shared<Material>(pipeline_state);
+    {
+        mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_albedo.png").c_str()));
+        mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_metal.png").c_str()));
+        mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_normals.png").c_str()));
+        mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_roughness.png").c_str()));
+        mat_floor->set_uv_scale({2.0f, 2.0f});
     }
 
     entities.emplace_back(
         Mesh::Load(FixPath("../../Assets/Meshes/cube.obj").c_str()),
-        material
+        mat_floor
     );
     entities.emplace_back(
         Mesh::Load(FixPath("../../Assets/Meshes/helix.obj").c_str()),
-        material,
+        mat_bronze,
         Transform({4.0f, 0.0f, 0.0f})
     );
     entities.emplace_back(
         Mesh::Load(FixPath("../../Assets/Meshes/sphere.obj").c_str()),
-        material,
+        mat_cobblestone,
         Transform({-4.0f, 0.0f, 0.0f})
     );
 }
