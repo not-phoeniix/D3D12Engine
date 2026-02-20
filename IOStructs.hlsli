@@ -1,19 +1,19 @@
 #ifndef IOSTRUCTS_H
 #define IOSTRUCTS_H
 
-struct VertexShaderInput { 
+struct VSInput { 
 	float3 position : POSITION;
 	float2 uv : TEXCOORD;
 	float3 normal : NORMAL;
 	float3 tangent : TANGENT;
 };
 
-struct VertexToPixel {
+struct PSInput {
 	float4 position : SV_POSITION;
 	float2 uv : TEXCOORD0;
 	float3 normal : NORMAL;
 	float3 tangent : TANGENT;
-	float3 worldPos : TEXCOORD1;
+	float3 world_pos : TEXCOORD1;
 };
 
 #endif

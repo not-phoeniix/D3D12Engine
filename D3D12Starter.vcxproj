@@ -176,6 +176,7 @@
     <ClInclude Include="GameEntity.h" />
     <ClInclude Include="Graphics.h" />
     <ClInclude Include="Input.h" />
+    <ClInclude Include="Light.h" />
     <ClInclude Include="Material.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="PathHelpers.h" />
@@ -207,6 +208,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="IOStructs.hlsli" />
+    <None Include="Lighting.hlsli" />
     <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

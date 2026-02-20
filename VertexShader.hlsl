@@ -7,13 +7,13 @@ cbuffer MatrixData : register(b0) {
 	float4x4 wit;
 }
 
-VertexToPixel main(VertexShaderInput input) {
-	VertexToPixel output;
+PSInput main(VSInput input) {
+	PSInput output;
 
 	float4x4 wvp = mul(proj, mul(view, world));
 
 	output.position = mul(wvp, float4(input.position, 1.0f));
-	output.worldPos = mul(world, float4(input.position, 1.0f)).xyz;
+	output.world_pos = mul(world, float4(input.position, 1.0f)).xyz;
 
 	output.uv = input.uv;
 

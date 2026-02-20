@@ -4,6 +4,9 @@
 #include <wrl/client.h>
 #include "Camera.h"
 #include "GameEntity.h"
+#include "Light.h"
+
+constexpr float GAME_GAMMA = 2.2f;
 
 class Game {
    public:
@@ -32,5 +35,6 @@ class Game {
 
     std::unique_ptr<Camera> camera;
     std::vector<GameEntity> entities;
+    std::vector<Light> lights;
 };
 

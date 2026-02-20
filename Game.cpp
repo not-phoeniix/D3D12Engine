@@ -68,10 +68,23 @@ void Game::CreateRootSigAndPipelineState() {
         transform_param.DescriptorTable.NumDescriptorRanges = 1;
         transform_param.DescriptorTable.pDescriptorRanges = &cbv_range_transform;
 
+        D3D12_DESCRIPTOR_RANGE cbv_range_scene_data = {};
+        cbv_range_scene_data.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+        cbv_range_scene_data.NumDescriptors = 1;
+        cbv_range_scene_data.BaseShaderRegister = 0;
+        cbv_range_scene_data.RegisterSpace = 0;
+        cbv_range_scene_data.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+        D3D12_ROOT_PARAMETER scene_data_param = {};
+        scene_data_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        scene_data_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        scene_data_param.DescriptorTable.NumDescriptorRanges = 1;
+        scene_data_param.DescriptorTable.pDescriptorRanges = &cbv_range_scene_data;
+
         D3D12_DESCRIPTOR_RANGE cbv_range_material = {};
         cbv_range_material.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
         cbv_range_material.NumDescriptors = 1;
-        cbv_range_material.BaseShaderRegister = 0;
+        cbv_range_material.BaseShaderRegister = 1;
         cbv_range_material.RegisterSpace = 0;
         cbv_range_material.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
@@ -83,6 +96,7 @@ void Game::CreateRootSigAndPipelineState() {
 
         std::vector<D3D12_ROOT_PARAMETER> root_params = {
             transform_param,
+            scene_data_param,
             material_param
         };
 
@@ -204,12 +218,21 @@ void Game::SceneInit() {
         100.0f
     );
 
+    lights.resize(1);
+    {
+        lights[0] = {};
+        lights[0].type = LIGHT_TYPE_DIRECTIONAL;
+        lights[0].direction = {2.0f, -5.0f, 1.0f};
+        lights[0].intensity = 1.0f;
+        lights[0].color = {1.0f, 1.0f, 1.0f};
+    }
+
     std::shared_ptr<Material> material = std::make_shared<Material>(pipeline_state);
     {
-        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_albedo.png").c_str()));
-        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_metal.png").c_str()));
-        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_normals.png").c_str()));
-        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_roughness.png").c_str()));
+        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_albedo.png").c_str()));
+        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_metal.png").c_str()));
+        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_normals.png").c_str()));
+        material->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_roughness.png").c_str()));
     }
 
     entities.emplace_back(
@@ -254,9 +277,9 @@ void Game::OnResize() {
 // Update your game here - user input, move objects, AI, etc.
 // --------------------------------------------------------
 void Game::Update(float deltaTime, float totalTime) {
-    // Example input checking: Quit if the escape key is pressed
-    if (Input::KeyDown(VK_ESCAPE))
+    if (Input::KeyDown(VK_ESCAPE)) {
         Window::Quit();
+    }
 
     camera->Update(deltaTime);
 
@@ -289,6 +312,22 @@ void Game::Draw(float deltaTime, float totalTime) {
     command_list->RSSetScissorRects(1, &scissor_rect);
     command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+    // copy scene data - ONCE PER FRAME
+    {
+        SceneDataBuffer scene_data = {};
+        scene_data.camera_world_pos = camera->GetTransform().GetPosition();
+        scene_data.gamma = GAME_GAMMA;
+        scene_data.light_count = static_cast<uint32_t>(lights.size());
+        memcpy(
+            scene_data.lights,
+            lights.data(),
+            sizeof(Light) * lights.size()
+        );
+
+        D3D12_GPU_DESCRIPTOR_HANDLE handle = Graphics::CBHeapFillNext(&scene_data, sizeof(scene_data));
+        command_list->SetGraphicsRootDescriptorTable(1, handle);
+    }
+
     for (auto& entity : entities) {
         std::shared_ptr<Mesh> mesh = entity.get_mesh();
         std::shared_ptr<Material> material = entity.get_material();
@@ -315,9 +354,12 @@ void Game::Draw(float deltaTime, float totalTime) {
                 sizeof(uint32_t) * texture_count
             );
             data.texture_index_count = texture_count;
+            data.uv_offset = material->get_uv_offset();
+            data.uv_scale = material->get_uv_scale();
+            data.color_tint = material->get_color_tint();
 
             D3D12_GPU_DESCRIPTOR_HANDLE handle = Graphics::CBHeapFillNext(&data, sizeof(data));
-            command_list->SetGraphicsRootDescriptorTable(1, handle);
+            command_list->SetGraphicsRootDescriptorTable(2, handle);
         }
 
         command_list->SetPipelineState(material->get_pipeline_state().Get());
