@@ -1,0 +1,62 @@
+// ======= Header Declarations =======
+
+// Buffer for bindless per-entity data
+inline Microsoft::WRL::ComPtr<ID3D12Resource> EntityDataStructuredBuffer;
+inline D3D12_CPU_DESCRIPTOR_HANDLE EntityDataUAV_CPU{};
+inline D3D12_GPU_DESCRIPTOR_HANDLE EntityDataUAV_GPU{};
+
+void CreateEntityDataBuffer(std::vector<std::shared_ptr<GameEntity>> scene);
+
+
+
+// ======== Function Bodies =========
+
+// --------------------------------------------------------
+// Creates the buffer for entity data read when ray tracing
+// --------------------------------------------------------
+void RayTracing::CreateEntityDataBuffer(std::vector<std::shared_ptr<GameEntity>> scene)
+{
+	// Set up entity data array
+	std::vector<RayTracingEntityData> entityData;
+	for (int i = 0; i < scene.size(); i++)
+	{
+		// Set up this entity's data
+		RayTracingEntityData data{};
+		XMFLOAT3 c = scene[i]->GetMaterial()->GetColorTint();
+		data.Color = XMFLOAT4(c.x, c.y, c.z, 1);
+		data.IndexBufferDescriptorIndex = Graphics::GetDescriptorIndex(scene[i]->GetMesh()->GetRayTracingData().IndexBufferSRV);
+		data.VertexBufferDescriptorIndex = Graphics::GetDescriptorIndex(scene[i]->GetMesh()->GetRayTracingData().VertexBufferSRV);
+		
+		entityData.push_back(data);
+	}
+
+	// How big will the buffer actually need to be?
+	UINT64 bufferSize = sizeof(RayTracingEntityData) * entityData.size();
+
+	// Reset the buffer if necessary, then create 
+	// the new one and copy into it
+	EntityDataStructuredBuffer.Reset();
+	EntityDataStructuredBuffer = Graphics::CreateBuffer(
+		bufferSize,
+		D3D12_HEAP_TYPE_DEFAULT,
+		D3D12_RESOURCE_STATE_COMMON, 
+		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+		0,
+		&entityData[0],
+		bufferSize);
+	
+	// Reserve slot in heap if necessary
+	if(!EntityDataUAV_CPU.ptr)
+		Graphics::ReserveDescriptorHeapSlot(&EntityDataUAV_CPU, &EntityDataUAV_GPU);
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
+	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+	uavDesc.Buffer.NumElements = (unsigned int)entityData.size();
+	uavDesc.Buffer.StructureByteStride = sizeof(RayTracingEntityData);
+
+	Graphics::Device->CreateUnorderedAccessView(
+		EntityDataStructuredBuffer.Get(),
+		0,
+		&uavDesc,
+		EntityDataUAV_CPU);
+}

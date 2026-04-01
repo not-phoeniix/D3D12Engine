@@ -28,3 +28,9 @@ struct MaterialBuffer {
     uint32_t texture_index_count;
     DirectX::XMUINT4 packed_texture_indices[MATERIAL_BUFFER_PACKED_VECTOR_COUNT];
 };
+
+struct RaytracingSceneData {
+    DirectX::XMFLOAT4X4 InverseViewProj;
+    DirectX::XMFLOAT3 CameraPosition;
+    float pad;
+};

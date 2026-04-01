@@ -6,6 +6,7 @@
 #include <fstream>
 #include <string>
 #include <unordered_map>
+#include "RayTracing.h"
 
 using namespace DirectX;
 
@@ -92,6 +93,8 @@ Mesh::Mesh(const Vertex* vertices, uint32_t vertex_count, const uint32_t* indice
     index_buffer_view.Format = DXGI_FORMAT_R32_UINT;
     index_buffer_view.SizeInBytes = sizeof(uint32_t) * index_count;
     index_buffer_view.BufferLocation = index_buffer->GetGPUVirtualAddress();
+
+    rt_data = RayTracing::CreateBottomLevelAccelerationStructureForMesh(this);
 }
 
 Mesh::~Mesh() { }

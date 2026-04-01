@@ -22,7 +22,6 @@ class Game {
     void OnResize();
 
    private:
-    void CreateRootSigAndPipelineState();
     void SceneInit();
     void ClearPrevFrame();
     void Present();
@@ -35,8 +34,8 @@ class Game {
     D3D12_VIEWPORT viewport = {};
     D3D12_RECT scissor_rect = {};
 
-    std::unique_ptr<Camera> camera;
-    std::vector<GameEntity> entities;
+    std::shared_ptr<Camera> camera;
+    std::vector<std::shared_ptr<GameEntity>> entities;
     std::vector<Light> lights;
 };
 
