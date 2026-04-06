@@ -131,7 +131,9 @@ void RayGen()
 	// Set up the payload for the ray
 	// This initializes the struct to all zeros
 	RayPayload payload = (RayPayload)0;
-
+	
+    RaytracingAccelerationStructure SceneTLAS = ResourceDescriptorHeap[SceneTLASDescriptorIndex];
+	
 	// Perform the ray trace for this ray
 	TraceRay(
 		SceneTLAS,
