@@ -61,13 +61,13 @@ void Game::SceneInit() {
 
     RandomizeLights();
 
-    // std::shared_ptr<Material> mat_bronze = std::make_shared<Material>(pipeline_state);
-    // {
-    //     mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_albedo.png").c_str()));
-    //     mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_metal.png").c_str()));
-    //     mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_normals.png").c_str()));
-    //     mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_roughness.png").c_str()));
-    // }
+    std::shared_ptr<Material> mat_bronze = std::make_shared<Material>(pipeline_state);
+    {
+        mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_albedo.png").c_str()));
+        mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_metal.png").c_str()));
+        mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_normals.png").c_str()));
+        mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_roughness.png").c_str()));
+    }
 
     std::shared_ptr<Material> mat_cobblestone = std::make_shared<Material>(pipeline_state);
     {
@@ -78,33 +78,38 @@ void Game::SceneInit() {
         mat_cobblestone->set_uv_scale({0.25f, 0.25f});
     }
 
-    // std::shared_ptr<Material> mat_floor = std::make_shared<Material>(pipeline_state);
-    // {
-    //     mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_albedo.png").c_str()));
-    //     mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_metal.png").c_str()));
-    //     mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_normals.png").c_str()));
-    //     mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_roughness.png").c_str()));
-    //     mat_floor->set_uv_scale({2.0f, 2.0f});
-    // }
+    std::shared_ptr<Material> mat_floor = std::make_shared<Material>(pipeline_state);
+    {
+        mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_albedo.png").c_str()));
+        mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_metal.png").c_str()));
+        mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_normals.png").c_str()));
+        mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_roughness.png").c_str()));
+        mat_floor->set_uv_scale({2.0f, 2.0f});
+    }
 
-    // entities.emplace_back(
-    //     Mesh::Load(FixPath("../../Assets/Meshes/cube.obj").c_str()),
-    //     mat_floor
-    // );
-    // entities.emplace_back(
-    //     Mesh::Load(FixPath("../../Assets/Meshes/helix.obj").c_str()),
-    //     mat_bronze,
-    //     Transform({4.0f, 0.0f, 0.0f})
-    // );
-    entities.push_back(
-        std::make_shared<GameEntity>(
-            Mesh::Load(FixPath("../../Assets/Meshes/sphere.obj").c_str()),
-            mat_cobblestone,
-            Transform({0.0f, 0.0f, 0.0f})
-        )
-    );
+    auto sphere_mesh = Mesh::Load(FixPath("../../Assets/Meshes/cube.obj").c_str());
 
-    RayTracing::CreateTopLevelAccelerationStructureForScene(entities[0]);
+    entities.resize(20);
+    for (size_t i = 0; i < entities.size(); i++) {
+        auto material = std::make_shared<Material>(pipeline_state);
+        material->set_color_tint({
+            randf_range(0.0f, 1.0f),
+            randf_range(0.0f, 1.0f),
+            randf_range(0.0f, 1.0f),
+        });
+
+        entities[i] = std::make_shared<GameEntity>(
+            sphere_mesh,
+            material,
+            Transform({randf_range(-10.0f, 10.0f), 0.0f, randf_range(-10.0f, 10.0f)})
+        );
+    }
+    entities[0]->get_transform().SetScale(1000.0f);
+    entities[0]->get_transform().SetPosition({0, -1000.0f, 0});
+    entities[0]->get_material()->set_color_tint({0.01f, 0.01f, 0.01f});
+
+    RayTracing::CreateEntityDataBuffer(entities);
+    RayTracing::CreateTopLevelAccelerationStructureForScene(entities);
 
     Graphics::CloseAndExecuteCommandList();
     Graphics::WaitForGPU();
@@ -150,7 +155,7 @@ void Game::Update(float deltaTime, float totalTime) {
     camera->Update(deltaTime);
 
     for (auto& entity : entities) {
-        entity->get_transform().Rotate(0, deltaTime, 0);
+        // entity->get_transform().Rotate(0, deltaTime, 0);
     }
 }
 
@@ -166,7 +171,7 @@ void Game::Draw(float deltaTime, float totalTime) {
     auto current_back_buffer = Graphics::BackBuffers[Graphics::get_swap_chain_index()];
     auto command_list = Graphics::CommandList;
 
-    RayTracing::CreateTopLevelAccelerationStructureForScene(entities[0]);
+    RayTracing::CreateTopLevelAccelerationStructureForScene(entities);
     RayTracing::Raytrace(camera, current_back_buffer);
 
     // command_list->SetDescriptorHeaps(1, Graphics::CBVSRVDescriptorHeap.GetAddressOf());
