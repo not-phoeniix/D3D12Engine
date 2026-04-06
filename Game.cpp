@@ -8,6 +8,7 @@
 #include "BufferStructs.h"
 #include <DirectXMath.h>
 #include <cstdlib>
+#include <time.h>
 #include "RayTracing.h"
 
 // Needed for a helper function to load pre-compiled shader files
@@ -18,7 +19,7 @@
 using namespace DirectX;
 
 static float randf_range(float min, float max) {
-    return min + ((max - min) * ((rand() / (float)RAND_MAX)));
+    return min + ((max - min) * ((std::rand() / (float)RAND_MAX)));
 }
 
 // --------------------------------------------------------
@@ -29,8 +30,10 @@ Game::Game() {
     RayTracing::Initialize(
         Window::Width(),
         Window::Height(),
-        FixPath(L"RayTracing.cso")
+        FixPath(L"Raytracing.cso")
     );
+
+    std::srand(static_cast<unsigned int>(time(NULL)));
 
     SceneInit();
 }
@@ -87,9 +90,9 @@ void Game::SceneInit() {
         mat_floor->set_uv_scale({2.0f, 2.0f});
     }
 
-    auto sphere_mesh = Mesh::Load(FixPath("../../Assets/Meshes/cube.obj").c_str());
+    auto sphere_mesh = Mesh::Load(FixPath("../../Assets/Meshes/sphere.obj").c_str());
 
-    entities.resize(20);
+    entities.resize(50);
     for (size_t i = 0; i < entities.size(); i++) {
         auto material = std::make_shared<Material>(pipeline_state);
         material->set_color_tint({
@@ -98,15 +101,18 @@ void Game::SceneInit() {
             randf_range(0.0f, 1.0f),
         });
 
-        entities[i] = std::make_shared<GameEntity>(
-            sphere_mesh,
-            material,
-            Transform({randf_range(-10.0f, 10.0f), 0.0f, randf_range(-10.0f, 10.0f)})
-        );
+        DirectX::XMFLOAT3 pos = {
+            randf_range(-20.0f, 20.0f),
+            0.0f,
+            randf_range(-20.0f, 20.0f),
+        };
+
+        entities[i] = std::make_shared<GameEntity>(sphere_mesh, material);
+        entities[i]->get_transform().SetPosition(pos);
     }
-    entities[0]->get_transform().SetScale(1000.0f);
-    entities[0]->get_transform().SetPosition({0, -1000.0f, 0});
-    entities[0]->get_material()->set_color_tint({0.01f, 0.01f, 0.01f});
+    entities[0]->get_transform().SetScale(10000.0f);
+    entities[0]->get_transform().SetPosition({0, -10001.0f, 0});
+    entities[0]->get_material()->set_color_tint({0.1f, 0.1f, 0.1f});
 
     RayTracing::CreateEntityDataBuffer(entities);
     RayTracing::CreateTopLevelAccelerationStructureForScene(entities);
