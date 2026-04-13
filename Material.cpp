@@ -4,6 +4,7 @@ Material::Material(Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline_state)
   : color_tint(1.0f, 1.0f, 1.0f),
     uv_scale(1.0f, 1.0f),
     uv_offset(0.0f, 0.0f),
+    roughness(1.0f),
     pipeline_state(pipeline_state),
     texture_index_count(0) { }
 

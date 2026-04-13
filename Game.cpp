@@ -100,6 +100,9 @@ void Game::SceneInit() {
             randf_range(0.0f, 1.0f),
             randf_range(0.0f, 1.0f),
         });
+        // saturate so we lie on the edges of roughness more frequently
+        float rand = randf_range(0.0f, 1.0f);
+        material->set_roughness(rand * rand);
 
         DirectX::XMFLOAT3 pos = {
             randf_range(-20.0f, 20.0f),

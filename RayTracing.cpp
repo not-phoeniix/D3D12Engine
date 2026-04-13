@@ -118,7 +118,7 @@ void RayTracing::CreateRaytracingRootSignatures() {
         globalRootSigDesc.NumStaticSamplers = 0;
         globalRootSigDesc.pStaticSamplers = 0;
         globalRootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
-        
+
         D3D12SerializeRootSignature(&globalRootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, blob.GetAddressOf(), errors.GetAddressOf());
         DXRDevice->CreateRootSignature(1, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(GlobalRaytracingRootSig.GetAddressOf()));
     }
@@ -216,7 +216,7 @@ void RayTracing::CreateRaytracingPipelineState(std::wstring raytracingShaderLibr
 
     // === Shader config (payload) ===
     D3D12_RAYTRACING_SHADER_CONFIG shaderConfigDesc = {};
-    shaderConfigDesc.MaxPayloadSizeInBytes = sizeof(DirectX::XMFLOAT3);   // Assuming a float3 color for now
+    shaderConfigDesc.MaxPayloadSizeInBytes = sizeof(DirectX::XMFLOAT3) + (sizeof(uint32_t) * 2);
     shaderConfigDesc.MaxAttributeSizeInBytes = sizeof(DirectX::XMFLOAT2); // Assuming a float2 for barycentric coords for now
 
     D3D12_STATE_SUBOBJECT shaderConfigSubObj = {};
@@ -426,7 +426,8 @@ void RayTracing::CreateEntityDataBuffer(std::vector<std::shared_ptr<GameEntity>>
     std::vector<RayTracingEntityData> data(scene.size());
     for (size_t i = 0; i < scene.size(); i++) {
         auto color = scene[i]->get_material()->get_color_tint();
-        data[i].Color = {color.x, color.y, color.z, 1.0f};
+        float roughness = scene[i]->get_material()->get_roughness();
+        data[i].Color = {color.x, color.y, color.z, roughness};
         data[i].IndexBufferDescriptorIndex = Graphics::GetDescriptorIndex(
             scene[i]->get_mesh()->get_raytracing_data().IndexBufferSRV
         );

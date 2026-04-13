@@ -1,4 +1,6 @@
-
+#define M_PI 3.14159f
+#define RAYS_PER_PIXEL 50
+#define MAX_RECUSION_DEPTH 20
 
 // === Structs ===
 
@@ -16,6 +18,8 @@ struct Vertex
 struct RayPayload
 {
 	float3 color;
+	uint recusion_depth;
+	uint iteration_index;
 };
 
 // Note: We'll be using the built-in BuiltInTriangleIntersectionAttributes struct
@@ -108,6 +112,28 @@ RayDesc CalcRayFromCamera(float2 rayIndices, float3 camPos, float4x4 invVP)
 	return ray;
 }
 
+float rand(float2 uv) {
+	return frac(sin(dot(uv, float2(12.9898, 78.233))) * 43758.5453);
+}
+
+float2 rand2(float2 uv) {
+	return float2(
+		rand(uv),
+		rand(uv.yx)
+	);
+}
+
+float3 RandomCosWeightedHemisphere(float u0, float u1, float3 unitNormal) {
+	float a = u0 * 2 - 1;
+	float b = sqrt(1 - a * a);
+	float phi = 2.0f * M_PI * u1;
+
+	return float3(
+		unitNormal.x + b * cos(phi),
+		unitNormal.y + b * sin(phi),
+		unitNormal.z + a
+	);
+}
 
 // === Shaders ===
 
@@ -121,20 +147,98 @@ void RayGen()
 	// Get the ray indices
 	uint2 rayIndices = DispatchRaysIndex().xy;
 
-	// Calculate the ray from the camera through a particular
-	// pixel of the output buffer using this shader's indices
-	RayDesc ray = CalcRayFromCamera(
-		rayIndices, 
-		cb.CameraPos,
-		cb.InverseViewProjection);
+	float3 totalColor = float3(0.0f, 0.0f, 0.0f);
 
-	// Set up the payload for the ray
-	// This initializes the struct to all zeros
-	RayPayload payload = (RayPayload)0;
+	for (int i = 0; i < RAYS_PER_PIXEL; i++) {
+		float2 adjustedIndices = (float2)rayIndices;
+		float ray1 = float(i) / RAYS_PER_PIXEL;
+		adjustedIndices += rand2(rayIndices.xy * ray1);
+
+		// Calculate the ray from the camera through a particular
+		// pixel of the output buffer using this shader's indices
+		RayDesc ray = CalcRayFromCamera(
+			adjustedIndices, 
+			cb.CameraPos,
+			cb.InverseViewProjection);
+
+		RayPayload payload = (RayPayload)0;
+		payload.color = float3(1.0f, 1.0f, 1.0f);
+		payload.recusion_depth = 0;
+		payload.iteration_index = i;
+
+		// Perform the ray trace for this ray
+    	RaytracingAccelerationStructure SceneTLAS = ResourceDescriptorHeap[SceneTLASDescriptorIndex];
+		TraceRay(
+			SceneTLAS,
+			RAY_FLAG_NONE,
+			0xFF,
+			0,
+			0,
+			0,
+			ray,
+			payload
+		);
+
+		totalColor += payload.color;
+	}
+
+	totalColor /= float(RAYS_PER_PIXEL);
+
+	// Set the final color of the buffer (gama corrected)
+	RWTexture2D <float4> OutputColor = ResourceDescriptorHeap[OutputUAVDescriptorIndex];
+	OutputColor[rayIndices] = float4(pow(totalColor, 1.0f / 2.2f), 1);
+}
+
+
+// Miss shader - What happens if the ray doesn't hit anything?
+[shader("miss")]
+void Miss(inout RayPayload payload)
+{
+    payload.color *= float3(0.3f, 0.5f, 0.75f);
+}
+
+
+// Closest hit shader - Runs the first time a ray hits anything
+[shader("closesthit")]
+void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes hitAttributes)
+{
+	if (payload.recusion_depth == MAX_RECUSION_DEPTH) {
+		payload.color = float3(0, 0, 0);
+		return;
+	}
+
+	StructuredBuffer<EntityData> entityDataBuffer = ResourceDescriptorHeap[EntityDataDescriptorIndex];
+	EntityData thisEntity = entityDataBuffer[InstanceIndex()];	
 	
+	payload.color *= thisEntity.Color.rgb;
+
+	// Get the interpolated vertex data
+	Vertex vert = InterpolateVertices(
+		PrimitiveIndex(), 
+		hitAttributes.barycentrics
+	);
+
+	float3 normal = normalize(mul(vert.normal, (float3x3)ObjectToWorld4x3()));
+
+	// getting some RNG for this particular pixel
+	float2 uv = float2(DispatchRaysIndex().xy / DispatchRaysDimensions().xy);
+	float2 rng = rand2(uv * (payload.recusion_depth + 1) + payload.iteration_index + RayTCurrent());
+	
+	// scatter rays in diff directions based on roughness, 
+	//   lerp between the two values using roughness (alpha channel)
+	float3 refl = reflect(WorldRayDirection(), normal);
+	float3 random_bounce = RandomCosWeightedHemisphere(rand(rng), rand(rng.yx), normal);
+	float3 dir = normalize(lerp(refl, random_bounce, thisEntity.Color.a));
+
+	RayDesc ray;
+	ray.Origin = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
+	ray.Direction = dir;
+	ray.TMin = 0.01f;
+	ray.TMax = 1000.0f;
+
+	payload.recusion_depth++;
+
     RaytracingAccelerationStructure SceneTLAS = ResourceDescriptorHeap[SceneTLASDescriptorIndex];
-	
-	// Perform the ray trace for this ray
 	TraceRay(
 		SceneTLAS,
 		RAY_FLAG_NONE,
@@ -143,40 +247,6 @@ void RayGen()
 		0,
 		0,
 		ray,
-		payload);
-
-	RWTexture2D <float4> OutputColor = ResourceDescriptorHeap[OutputUAVDescriptorIndex];
-
-	// Set the final color of the buffer
-	OutputColor[rayIndices] = float4(payload.color, 1);
-}
-
-
-// Miss shader - What happens if the ray doesn't hit anything?
-[shader("miss")]
-void Miss(inout RayPayload payload)
-{
-	// Nothing was hit, so return black for now.
-	// Ideally this is where we would do skybox stuff!
-    payload.color = float3(0.4f, 0.6f, 0.75f);
-}
-
-
-// Closest hit shader - Runs the first time a ray hits anything
-[shader("closesthit")]
-void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes hitAttributes)
-{
-	// // Get the interpolated vertex data
-	// Vertex interpolatedVert = InterpolateVertices(
-	// 	PrimitiveIndex(), 
-	// 	hitAttributes.barycentrics);
-
-	// // Use the resulting data to set the final color
-	// // Note: Here is where we would do actual shading!
-	// payload.color = interpolatedVert.normal;
-
-	// Get the data for this entity
-	StructuredBuffer<EntityData> entityDataBuffer = ResourceDescriptorHeap[EntityDataDescriptorIndex];
-	EntityData thisEntity = entityDataBuffer[InstanceIndex()];	
-	payload.color = thisEntity.Color.rgb;
+		payload
+	);
 }
