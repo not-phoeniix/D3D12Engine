@@ -108,7 +108,7 @@ RayDesc CalcRayFromCamera(float2 rayIndices, float3 camPos, float4x4 invVP)
 	RayDesc ray;
 	ray.Origin = camPos.xyz;
 	ray.Direction = normalize(worldPos.xyz - ray.Origin);
-	ray.TMin = 0.01f;
+	ray.TMin = 0.1f;
 	ray.TMax = 1000.0f;
 	return ray;
 }
@@ -268,7 +268,7 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 	RayDesc ray;
 	ray.Origin = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();
 	ray.Direction = dir;
-	ray.TMin = 0.01f;
+	ray.TMin = 0.1f;
 	ray.TMax = 1000.0f;
 
 	payload.recusion_depth++;

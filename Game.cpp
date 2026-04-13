@@ -78,7 +78,7 @@ void Game::SceneInit() {
         float rand = randf_range(0.0f, 1.0f);
         material->set_roughness(rand * rand);
 
-        if (randf_range(0, 1) > 0.5f) {
+        if (randf_range(0, 1) > 0.8f) {
             material->set_refractive(true);
             material->set_refraction_index(1.3f);
         }
