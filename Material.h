@@ -14,6 +14,8 @@ class Material {
     DirectX::XMFLOAT2 uv_offset;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline_state;
     float roughness;
+    bool refractive;
+    float refraction_index;
     uint32_t texture_indices[MATERIAL_MAX_TEXTURES];
     uint32_t texture_index_count;
 
@@ -28,6 +30,8 @@ class Material {
 
     DirectX::XMFLOAT3 get_color_tint() const { return color_tint; }
     float get_roughness() const { return roughness; }
+    bool get_refractive() const { return refractive; }
+    float get_refraction_index() const { return refraction_index; }
     DirectX::XMFLOAT2 get_uv_scale() const { return uv_scale; }
     DirectX::XMFLOAT2 get_uv_offset() const { return uv_offset; }
     Microsoft::WRL::ComPtr<ID3D12PipelineState> get_pipeline_state() const { return pipeline_state; }
@@ -37,4 +41,6 @@ class Material {
     void set_uv_scale(DirectX::XMFLOAT2 uv_scale) { this->uv_scale = uv_scale; }
     void set_uv_offset(DirectX::XMFLOAT2 uv_offset) { this->uv_offset = uv_offset; }
     void set_roughness(float roughness) { this->roughness = roughness; }
+    void set_refractive(bool refractive) { this->refractive = refractive; }
+    void set_refraction_index(float ri) { this->refraction_index = ri; }
 };

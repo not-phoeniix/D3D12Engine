@@ -64,32 +64,6 @@ void Game::SceneInit() {
 
     RandomizeLights();
 
-    std::shared_ptr<Material> mat_bronze = std::make_shared<Material>(pipeline_state);
-    {
-        mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_albedo.png").c_str()));
-        mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_metal.png").c_str()));
-        mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_normals.png").c_str()));
-        mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_roughness.png").c_str()));
-    }
-
-    std::shared_ptr<Material> mat_cobblestone = std::make_shared<Material>(pipeline_state);
-    {
-        mat_cobblestone->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_albedo.png").c_str()));
-        mat_cobblestone->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_metal.png").c_str()));
-        mat_cobblestone->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_normals.png").c_str()));
-        mat_cobblestone->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_roughness.png").c_str()));
-        mat_cobblestone->set_uv_scale({0.25f, 0.25f});
-    }
-
-    std::shared_ptr<Material> mat_floor = std::make_shared<Material>(pipeline_state);
-    {
-        mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_albedo.png").c_str()));
-        mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_metal.png").c_str()));
-        mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_normals.png").c_str()));
-        mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_roughness.png").c_str()));
-        mat_floor->set_uv_scale({2.0f, 2.0f});
-    }
-
     auto sphere_mesh = Mesh::Load(FixPath("../../Assets/Meshes/sphere.obj").c_str());
 
     entities.resize(50);
@@ -104,6 +78,11 @@ void Game::SceneInit() {
         float rand = randf_range(0.0f, 1.0f);
         material->set_roughness(rand * rand);
 
+        if (randf_range(0, 1) > 0.5f) {
+            material->set_refractive(true);
+            material->set_refraction_index(1.3f);
+        }
+
         DirectX::XMFLOAT3 pos = {
             randf_range(-20.0f, 20.0f),
             0.0f,
@@ -116,6 +95,8 @@ void Game::SceneInit() {
     entities[0]->get_transform().SetScale(10000.0f);
     entities[0]->get_transform().SetPosition({0, -10001.0f, 0});
     entities[0]->get_material()->set_color_tint({0.1f, 0.1f, 0.1f});
+    entities[0]->get_material()->set_refractive(false);
+    entities[0]->get_material()->set_roughness(1.0f);
 
     RayTracing::CreateEntityDataBuffer(entities);
     RayTracing::CreateTopLevelAccelerationStructureForScene(entities);

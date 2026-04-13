@@ -35,7 +35,8 @@ struct EntityData {
 	float4 Color;
 	uint VertexBufferDescriptorIndex;
 	uint IndexBufferDescriptorIndex;
-	float pad[2];
+	bool Refractive;
+	float RefractionIndex;
 };
 
 // === Constant buffers ===
@@ -123,6 +124,10 @@ float2 rand2(float2 uv) {
 	);
 }
 
+float3 length_sq(float3 v) {
+	return v.x * v.x + v.y * v.y + v.z * v.z;
+}
+
 float3 RandomCosWeightedHemisphere(float u0, float u1, float3 unitNormal) {
 	float a = u0 * 2 - 1;
 	float b = sqrt(1 - a * a);
@@ -133,6 +138,13 @@ float3 RandomCosWeightedHemisphere(float u0, float u1, float3 unitNormal) {
 		unitNormal.y + b * sin(phi),
 		unitNormal.z + a
 	);
+}
+
+float GetReflectance(float cos, float refract_index) {
+	// schlick's approx
+	float r0 = (1.0f - refract_index) / (1.0f + refract_index);
+	r0 *= r0;
+	return r0 + (1.0f - r0) - pow((1.0f - cos), 5.0f);
 }
 
 // === Shaders ===
@@ -210,7 +222,6 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 	StructuredBuffer<EntityData> entityDataBuffer = ResourceDescriptorHeap[EntityDataDescriptorIndex];
 	EntityData thisEntity = entityDataBuffer[InstanceIndex()];	
 	
-	payload.color *= thisEntity.Color.rgb;
 
 	// Get the interpolated vertex data
 	Vertex vert = InterpolateVertices(
@@ -219,16 +230,40 @@ void ClosestHit(inout RayPayload payload, BuiltInTriangleIntersectionAttributes 
 	);
 
 	float3 normal = normalize(mul(vert.normal, (float3x3)ObjectToWorld4x3()));
+	float3 dir;
 
-	// getting some RNG for this particular pixel
+	// getting rng seed for this particular pixel
 	float2 uv = float2(DispatchRaysIndex().xy / DispatchRaysDimensions().xy);
-	float2 rng = rand2(uv * (payload.recusion_depth + 1) + payload.iteration_index + RayTCurrent());
+	float2 rand_seed = uv * ((payload.recusion_depth + 1) + payload.iteration_index + RayTCurrent());
+
+	if (!thisEntity.Refractive) {
+		payload.color *= thisEntity.Color.rgb;
+
+		float2 rng = rand2(rand_seed);
+
+		// scatter rays in diff directions based on roughness, 
+		//   lerp between the two values using roughness (alpha channel)
+		float3 refl = reflect(WorldRayDirection(), normal);
+		float3 random_bounce = RandomCosWeightedHemisphere(rand(rng), rand(rng.yx), normal);
+		dir = normalize(lerp(refl, random_bounce, thisEntity.Color.a));
+	} else {
+		// we don't alter the color at all, just change the dir
+
+		float cos_theta = min(dot(-WorldRayDirection(), normal), 1.0f);
+		float sin_theta = sqrt(1.0f - cos_theta * cos_theta);
 	
-	// scatter rays in diff directions based on roughness, 
-	//   lerp between the two values using roughness (alpha channel)
-	float3 refl = reflect(WorldRayDirection(), normal);
-	float3 random_bounce = RandomCosWeightedHemisphere(rand(rng), rand(rng.yx), normal);
-	float3 dir = normalize(lerp(refl, random_bounce, thisEntity.Color.a));
+		bool cannot_refract = thisEntity.RefractionIndex * sin_theta > 1.0f;
+		if (cannot_refract || GetReflectance(cos_theta, thisEntity.RefractionIndex) > rand(rand_seed)) {
+			// reflect
+			dir = reflect(WorldRayDirection(), normal);
+		} else {
+			// refract
+			float cos_theta = min(dot(-WorldRayDirection(), normal), 1);
+			float3 r_out_perp = thisEntity.RefractionIndex * (WorldRayDirection() + (normal * cos_theta));
+			float3 r_out_parallel = -sqrt(abs(1 - length_sq(r_out_perp))) * normal;
+			dir = r_out_perp + r_out_parallel;
+		}		
+	}
 
 	RayDesc ray;
 	ray.Origin = WorldRayOrigin() + WorldRayDirection() * RayTCurrent();

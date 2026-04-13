@@ -434,6 +434,7 @@ void RayTracing::CreateEntityDataBuffer(std::vector<std::shared_ptr<GameEntity>>
         data[i].VertexBufferDescriptorIndex = Graphics::GetDescriptorIndex(
             scene[i]->get_mesh()->get_raytracing_data().VertexBufferSRV
         );
+        data[i].Refractive = scene[i]->get_material()->get_refractive();
     }
 
     EntityDataStructuredBuffer.Reset();
