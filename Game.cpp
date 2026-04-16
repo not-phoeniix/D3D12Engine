@@ -25,7 +25,8 @@ static float randf_range(float min, float max) {
 // are initialized but before the game loop begins
 // --------------------------------------------------------
 Game::Game() {
-    CreateRootSigAndPipelineState();
+    CreateMainPipelineStuff();
+    InitSky();
     SceneInit();
 }
 
@@ -39,7 +40,7 @@ Game::~Game() {
     Graphics::WaitForGPU();
 }
 
-void Game::CreateRootSigAndPipelineState() {
+void Game::CreateMainPipelineStuff() {
     // load shader bytecode !!!
     Microsoft::WRL::ComPtr<ID3DBlob> vertex_shader_bytecode;
     Microsoft::WRL::ComPtr<ID3DBlob> pixel_shader_bytecode;
@@ -209,6 +210,143 @@ void Game::CreateRootSigAndPipelineState() {
     }
 }
 
+void Game::InitSky() {
+    // load shader bytecode !!!
+    Microsoft::WRL::ComPtr<ID3DBlob> vertex_shader_bytecode;
+    Microsoft::WRL::ComPtr<ID3DBlob> pixel_shader_bytecode;
+    {
+        D3DReadFileToBlob(
+            FixPath(L"SkyVertexShader.cso").c_str(),
+            vertex_shader_bytecode.GetAddressOf()
+        );
+        D3DReadFileToBlob(
+            FixPath(L"SkyPixelShader.cso").c_str(),
+            pixel_shader_bytecode.GetAddressOf()
+        );
+    }
+
+    // root signature
+    {
+        D3D12_DESCRIPTOR_RANGE cbv_range_transform = {};
+        cbv_range_transform.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+        cbv_range_transform.NumDescriptors = 1;
+        cbv_range_transform.BaseShaderRegister = 0;
+        cbv_range_transform.RegisterSpace = 0;
+        cbv_range_transform.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+        D3D12_ROOT_PARAMETER transform_param = {};
+        transform_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        transform_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+        transform_param.DescriptorTable.NumDescriptorRanges = 1;
+        transform_param.DescriptorTable.pDescriptorRanges = &cbv_range_transform;
+
+        D3D12_ROOT_PARAMETER root_constant_param = {};
+        root_constant_param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        root_constant_param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        root_constant_param.Constants.Num32BitValues = 1;
+        root_constant_param.Constants.RegisterSpace = 0;
+        root_constant_param.Constants.ShaderRegister = 0;
+
+        std::vector<D3D12_ROOT_PARAMETER> root_params = {
+            transform_param,
+            root_constant_param,
+        };
+
+        D3D12_STATIC_SAMPLER_DESC aniso_wrap_sampler = {};
+        aniso_wrap_sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        aniso_wrap_sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        aniso_wrap_sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        aniso_wrap_sampler.Filter = D3D12_FILTER_ANISOTROPIC;
+        aniso_wrap_sampler.MaxAnisotropy = 16;
+        aniso_wrap_sampler.MaxLOD = D3D12_FLOAT32_MAX;
+        aniso_wrap_sampler.ShaderRegister = 0; // register(s0)
+        aniso_wrap_sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+        std::vector<D3D12_STATIC_SAMPLER_DESC> samplers = {
+            aniso_wrap_sampler
+        };
+
+        D3D12_ROOT_SIGNATURE_DESC root_sig_desc = {};
+        root_sig_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+                              D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+        root_sig_desc.NumParameters = static_cast<UINT>(root_params.size());
+        root_sig_desc.pParameters = root_params.data();
+        root_sig_desc.NumStaticSamplers = static_cast<UINT>(samplers.size());
+        root_sig_desc.pStaticSamplers = samplers.data();
+
+        ID3DBlob* serialized_root_sig = nullptr;
+        ID3DBlob* errors = nullptr;
+
+        HRESULT result = D3D12SerializeRootSignature(
+            &root_sig_desc,
+            D3D_ROOT_SIGNATURE_VERSION_1,
+            &serialized_root_sig,
+            &errors
+        );
+
+        if (errors != nullptr) {
+            OutputDebugString((wchar_t*)errors->GetBufferPointer());
+        }
+
+        Graphics::Device->CreateRootSignature(
+            0,
+            serialized_root_sig->GetBufferPointer(),
+            serialized_root_sig->GetBufferSize(),
+            IID_PPV_ARGS(sky_root_signature.GetAddressOf())
+        );
+    }
+
+    // pipeline state
+    {
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = {};
+
+        // input layout
+        std::vector<D3D12_INPUT_ELEMENT_DESC> input_elements = vertex_get_input_elements();
+
+        pso_desc.InputLayout.NumElements = (uint32_t)input_elements.size();
+        pso_desc.InputLayout.pInputElementDescs = input_elements.data();
+        pso_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+
+        pso_desc.pRootSignature = sky_root_signature.Get();
+
+        pso_desc.VS.pShaderBytecode = vertex_shader_bytecode->GetBufferPointer();
+        pso_desc.VS.BytecodeLength = vertex_shader_bytecode->GetBufferSize();
+        pso_desc.PS.pShaderBytecode = pixel_shader_bytecode->GetBufferPointer();
+        pso_desc.PS.BytecodeLength = pixel_shader_bytecode->GetBufferSize();
+
+        pso_desc.NumRenderTargets = 1;
+        pso_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+        pso_desc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+        pso_desc.SampleDesc.Count = 1;
+        pso_desc.SampleDesc.Quality = 0;
+
+        pso_desc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+        pso_desc.RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;
+        pso_desc.RasterizerState.DepthClipEnable = true;
+
+        pso_desc.DepthStencilState.DepthEnable = true;
+        pso_desc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+        pso_desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+
+        pso_desc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+        pso_desc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
+        pso_desc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+        pso_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+        pso_desc.SampleMask = 0xFFFFFFFF;
+
+        Graphics::Device->CreateGraphicsPipelineState(
+            &pso_desc,
+            IID_PPV_ARGS(sky_pipeline_state.GetAddressOf())
+        );
+    }
+
+    // actually load sky and save ID for shader !!!
+    sky_cubemap_id = Graphics::CreateCubemap(
+        FixPath(L"../../Assets/Skyboxes/Clouds Pink/")
+    );
+}
+
 // --------------------------------------------------------
 // Initializes scene objects like cameras and entities
 // --------------------------------------------------------
@@ -251,8 +389,10 @@ void Game::SceneInit() {
         mat_floor->set_uv_scale({2.0f, 2.0f});
     }
 
+    cube_mesh = Mesh::Load(FixPath("../../Assets/Meshes/cube.obj").c_str());
+
     entities.emplace_back(
-        Mesh::Load(FixPath("../../Assets/Meshes/cube.obj").c_str()),
+        cube_mesh,
         mat_floor
     );
     entities.emplace_back(
@@ -309,7 +449,7 @@ void Game::Update(float deltaTime, float totalTime) {
 // --------------------------------------------------------
 void Game::Draw(float deltaTime, float totalTime) {
     ClearPrevFrame();
-    
+
     if (Input::KeyPress(VK_SPACE)) {
         RandomizeLights();
     }
@@ -390,6 +530,32 @@ void Game::Draw(float deltaTime, float totalTime) {
         command_list->IASetIndexBuffer(&ib_view);
 
         command_list->DrawIndexedInstanced(mesh->get_index_count(), 1, 0, 0, 0);
+    }
+
+    // draw sky
+    {
+        command_list->SetGraphicsRootSignature(sky_root_signature.Get());
+        command_list->SetPipelineState(sky_pipeline_state.Get());
+
+        // matrix buffer copying
+        SkyMatrixBuffer data = {};
+        data.view = camera->GetView();
+        data.proj = camera->GetProjection();
+        D3D12_GPU_DESCRIPTOR_HANDLE handle = Graphics::CBHeapFillNext(&data, sizeof(data));
+        command_list->SetGraphicsRootDescriptorTable(0, handle);
+
+        // push constants copying wait no push constants are a vulkan
+        //   thing sorry *ROOT* constants (im too used to vulkan lol)
+        command_list->SetGraphicsRoot32BitConstant(1, sky_cubemap_id, 0);
+
+        // bind cube index/vertex buffers...
+        D3D12_VERTEX_BUFFER_VIEW vb_view = cube_mesh->get_vb_view();
+        command_list->IASetVertexBuffers(0, 1, &vb_view);
+        D3D12_INDEX_BUFFER_VIEW ib_view = cube_mesh->get_ib_view();
+        command_list->IASetIndexBuffer(&ib_view);
+
+        // then draw!
+        command_list->DrawIndexedInstanced(cube_mesh->get_index_count(), 1, 0, 0, 0);
     }
 
     Present();

@@ -22,15 +22,20 @@ class Game {
     void OnResize();
 
    private:
-    void CreateRootSigAndPipelineState();
+    void CreateMainPipelineStuff();
+    void InitSky();
     void SceneInit();
     void ClearPrevFrame();
     void Present();
-    
+
     void RandomizeLights();
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline_state;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> sky_root_signature;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> sky_pipeline_state;
+    std::shared_ptr<Mesh> cube_mesh;
+    uint32_t sky_cubemap_id;
 
     D3D12_VIEWPORT viewport = {};
     D3D12_RECT scissor_rect = {};

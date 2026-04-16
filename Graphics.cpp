@@ -674,7 +674,7 @@ void Graphics::PrintDebugMessages() {
 //   - Multiframe sync has been implemented, so ResetAllocatorAndCommandList() has a parameter.  If yours doesn’t, simply remove the argument.
 
 // === Graphics.cpp ===
-unsigned int Graphics::CreateCubemap(const std::wstring& path) {
+uint32_t Graphics::CreateCubemap(const std::wstring& path) {
     // Temporary textures
     Microsoft::WRL::ComPtr<ID3D12Resource> faces[6] {};
 
@@ -682,20 +682,20 @@ unsigned int Graphics::CreateCubemap(const std::wstring& path) {
     DirectX::ResourceUploadBatch upload(Device.Get());
     upload.Begin();
 
-    const wchar_t* right = (path + L"/right.png").c_str();
-    const wchar_t* left = (path + L"/left.png").c_str();
-    const wchar_t* up = (path + L"/up.png").c_str();
-    const wchar_t* down = (path + L"/down.png").c_str();
-    const wchar_t* front = (path + L"/front.png").c_str();
-    const wchar_t* back = (path + L"/back.png").c_str();
+    std::wstring right = (path + L"/right.png");
+    std::wstring left = (path + L"/left.png");
+    std::wstring up = (path + L"/up.png");
+    std::wstring down = (path + L"/down.png");
+    std::wstring front = (path + L"/front.png");
+    std::wstring back = (path + L"/back.png");
 
     // Load all six textures
-    DirectX::CreateWICTextureFromFile(Device.Get(), upload, right, faces[0].GetAddressOf());
-    DirectX::CreateWICTextureFromFile(Device.Get(), upload, left, faces[1].GetAddressOf());
-    DirectX::CreateWICTextureFromFile(Device.Get(), upload, up, faces[2].GetAddressOf());
-    DirectX::CreateWICTextureFromFile(Device.Get(), upload, down, faces[3].GetAddressOf());
-    DirectX::CreateWICTextureFromFile(Device.Get(), upload, front, faces[4].GetAddressOf());
-    DirectX::CreateWICTextureFromFile(Device.Get(), upload, back, faces[5].GetAddressOf());
+    DirectX::CreateWICTextureFromFile(Device.Get(), upload, right.c_str(), faces[0].GetAddressOf());
+    DirectX::CreateWICTextureFromFile(Device.Get(), upload, left.c_str(), faces[1].GetAddressOf());
+    DirectX::CreateWICTextureFromFile(Device.Get(), upload, up.c_str(), faces[2].GetAddressOf());
+    DirectX::CreateWICTextureFromFile(Device.Get(), upload, down.c_str(), faces[3].GetAddressOf());
+    DirectX::CreateWICTextureFromFile(Device.Get(), upload, front.c_str(), faces[4].GetAddressOf());
+    DirectX::CreateWICTextureFromFile(Device.Get(), upload, back.c_str(), faces[5].GetAddressOf());
 
     // Perform the upload and wait for it to finish before returning the texture
     auto finish = upload.End(CommandQueue.Get());

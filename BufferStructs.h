@@ -14,6 +14,11 @@ struct TransformBuffer {
     DirectX::XMFLOAT4X4 wit;
 };
 
+struct SkyMatrixBuffer {
+    DirectX::XMFLOAT4X4 view;
+    DirectX::XMFLOAT4X4 proj;
+};
+
 struct SceneDataBuffer {
     DirectX::XMFLOAT3 camera_world_pos;
     float gamma;
