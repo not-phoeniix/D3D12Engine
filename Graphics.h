@@ -67,6 +67,7 @@ namespace Graphics {
     Microsoft::WRL::ComPtr<ID3D12Resource> CreateStaticBuffer(size_t data_stride, uint32_t data_count, const void* data);
     D3D12_GPU_DESCRIPTOR_HANDLE CBHeapFillNext(const void* data, size_t size);
     uint32_t LoadTexture(const wchar_t* file, bool generate_mips = true);
+    uint32_t CreateCubemap(const std::wstring& path);
 
     // Command stuff & sync
     void ResetAllocatorAndCommandList(uint32_t index);
