@@ -57,6 +57,11 @@ float Attenuate(Light light, float3 worldPos) {
     return att * att;
 }
 
+float FresnelApprox(float3 v, float3 n) {
+    float NoV = saturate(dot(n, v));
+    return F0_NON_METAL + (1.0f - F0_NON_METAL) * pow(1.0f - NoV, 5);
+}
+
 // PBR FUNCTIONS ================
 
 // Lambert diffuse BRDF - Same as the basic lighting diffuse calculation!

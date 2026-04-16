@@ -478,6 +478,7 @@ void Game::Draw(float deltaTime, float totalTime) {
         scene_data.camera_world_pos = camera->GetTransform().GetPosition();
         scene_data.gamma = GAME_GAMMA;
         scene_data.light_count = static_cast<uint32_t>(lights.size());
+        scene_data.skybox_cubemap_id = sky_cubemap_id;
         memcpy(
             scene_data.lights,
             lights.data(),

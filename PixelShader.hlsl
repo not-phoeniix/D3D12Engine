@@ -4,7 +4,6 @@
 //! make sure this matches the constexpr in "Material.h" !!!!
 #define MATERIAL_MAX_TEXTURES 32
 #define PACKED_VECTOR_COUNT (MATERIAL_MAX_TEXTURES + 3) / 4
-#define TEXTURE_SPACE space1
 
 SamplerState BasicSampler : register(s0);
 
@@ -13,6 +12,7 @@ cbuffer SceneData : register(b0) {
 	float gamma;
 	Light lights[MAX_LIGHTS];
 	uint light_count;
+	uint skybox_cubemap_id;
 };
 
 cbuffer MaterialData : register(b1) {
@@ -46,6 +46,7 @@ float4 main(PSInput input) : SV_TARGET {
 	Texture2D metalness_map = ResourceDescriptorHeap[get_texture_index(1)];
 	Texture2D normal_map = ResourceDescriptorHeap[get_texture_index(2)];
 	Texture2D roughness_map = ResourceDescriptorHeap[get_texture_index(3)];		
+	TextureCube sky_cubemap = ResourceDescriptorHeap[skybox_cubemap_id];
 
 	// apply UV modifications
 	input.uv *= uv_scale;
@@ -82,6 +83,17 @@ float4 main(PSInput input) : SV_TARGET {
 		}
 	}
 
+	// add skybox reflection
+	float3 to_frag = normalize(input.world_pos - camera_world_pos);
+	float3 refl_vec = reflect(to_frag, input.normal);
+	float3 sky_refl = sky_cubemap.Sample(BasicSampler, refl_vec).rgb;
+
+	float3 sky_surface_blend = lerp(
+		total_light, 
+		sky_refl, 
+		FresnelApprox(input.normal, -to_frag)
+	);
+
 	// gamma correction
-	return float4(pow(abs(total_light), 1.0 / gamma), 1);;
+	return float4(pow(abs(sky_surface_blend), 1.0 / gamma), 1);;
 }

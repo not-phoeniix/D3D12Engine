@@ -24,6 +24,7 @@ struct SceneDataBuffer {
     float gamma;
     Light lights[MAX_LIGHTS];
     uint32_t light_count;
+    uint32_t skybox_cubemap_id;
 };
 
 struct MaterialBuffer {
