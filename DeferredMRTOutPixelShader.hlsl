@@ -7,6 +7,8 @@
 
 SamplerState BasicSampler : register(s0);
 
+// none of this stuff is used in this shader YET but I didn't feel 
+//   like making and managing a brand new PSO (sorry prof)
 cbuffer SceneData : register(b0) {
 	float3 camera_world_pos;
 	float gamma;
@@ -26,13 +28,6 @@ cbuffer MaterialData : register(b1) {
 	uint texture_count;
 	uint4 texture_indices[PACKED_VECTOR_COUNT];
 }
-
-struct MRTOut {
-	float4 albedo: SV_TARGET0;
-	float4 normals: SV_TARGET1;
-	float4 material: SV_TARGET2;
-	float4 world_pos_depth: SV_TARGET3;
-};
 
 uint get_texture_index(uint mat_index) {
 	uint arr_index = mat_index / 4;
@@ -76,8 +71,11 @@ MRTOut main(PSInput input) {
 	output.albedo = float4(surface_color, 1);
 	output.normals = float4(input.normal * 0.5f + 0.5f, 1.0f);
 	output.material = float4(roughness, metalness, 0.0f, 1.0f);
-	// im just gonna divide by a thousand to adhere to texture clamp restraints
-	output.world_pos_depth = float4(input.world_pos / 1000.0f, input.position.z);
+	output.world_pos_depth = float4(
+		// pack world pos to fit in a texture
+		input.world_pos,
+		input.position.z
+	);
 
 	return output;
 

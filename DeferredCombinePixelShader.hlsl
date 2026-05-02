@@ -39,20 +39,22 @@ float4 main(PostProcessIn input) : SV_TARGET {
 	Texture2D world_pos_depth_tex = ResourceDescriptorHeap[world_pos_depth_rt_id];
 	TextureCube sky_cubemap = ResourceDescriptorHeap[skybox_cubemap_id];
 
-    float3 albedo = albedo_tex.Sample(BasicSampler, input.uv).xyz;
+    float4 albedo = albedo_tex.Sample(BasicSampler, input.uv);
     float2 material = material_tex.Sample(BasicSampler, input.uv).xy;
     float3 normal = normals_tex.Sample(BasicSampler, input.uv).xyz * 2.0f - float3(1.0f, 1.0f, 1.0f);
     float4 world_pos_depth_sample = world_pos_depth_tex.Sample(BasicSampler, input.uv);
     float roughness = material.x;
     float metalness = material.y;
     float depth = world_pos_depth_sample.w;
+	float3 surface_color = albedo.rgb;
+	float light_mask = albedo.w;
 
     PSInput light_input;
     // unpack what we packed before
-    light_input.world_pos = world_pos_depth_sample.xyz * 1000.0f;
+    light_input.world_pos = world_pos_depth_sample.rgb;
     light_input.normal = normal;
 
-	float3 specular_color = lerp(F0_NON_METAL.rrr, albedo, metalness);
+	float3 specular_color = lerp(F0_NON_METAL.rrr, surface_color, metalness);
 	float3 total_light = float3(0.0, 0.0, 0.0);
 
 	uint light_iterations = min(light_count, MAX_LIGHTS);
@@ -62,13 +64,13 @@ float4 main(PostProcessIn input) : SV_TARGET {
 
 		switch (light.type) {
 			case LIGHT_TYPE_DIRECTIONAL:
-				total_light += LightDirectionalPBR(light, light_input, camera_world_pos, roughness, specular_color, metalness, albedo);
+				total_light += LightDirectionalPBR(light, light_input, camera_world_pos, roughness, specular_color, metalness, surface_color);
 				break;
 			case LIGHT_TYPE_POINT:
-				total_light += LightPointPBR(light, light_input, camera_world_pos, roughness, specular_color, metalness, albedo);
+				total_light += LightPointPBR(light, light_input, camera_world_pos, roughness, specular_color, metalness, surface_color);
 				break;
 			case LIGHT_TYPE_SPOT:
-				total_light += LightSpotPBR(light, light_input, camera_world_pos, roughness, specular_color, metalness, albedo);
+				total_light += LightSpotPBR(light, light_input, camera_world_pos, roughness, specular_color, metalness, surface_color);
 				break;
 		}
 	}
@@ -84,6 +86,13 @@ float4 main(PostProcessIn input) : SV_TARGET {
 		FresnelApprox(normal, -to_frag)
 	);
 
+	// light mask 1 means fully lit, 0 means solely albedo color
+	float3 final_color = lerp(
+		surface_color, 
+		pow(abs(sky_surface_blend), 1.0 / gamma), 
+		light_mask
+	);
+
 	// gamma correction
-	return float4(pow(abs(sky_surface_blend), 1.0 / gamma), 1);
+	return float4(final_color, 1.0f);
 }

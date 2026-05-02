@@ -26,4 +26,11 @@ struct SkyPSIn {
 	float3 sample_dir : DIRECTION;
 };
 
+struct MRTOut {
+	float4 albedo: SV_TARGET0;
+	float4 normals: SV_TARGET1;
+	float4 material: SV_TARGET2;
+	float4 world_pos_depth: SV_TARGET3;
+};
+
 #endif

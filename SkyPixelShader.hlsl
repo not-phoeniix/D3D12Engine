@@ -6,7 +6,13 @@ cbuffer SkyInfoConstants : register(b0) {
     uint cubemap_id;
 }
 
-float4 main(SkyPSIn input) : SV_TARGET {
+MRTOut main(SkyPSIn input) : SV_TARGET {
     TextureCube tex = ResourceDescriptorHeap[cubemap_id];
-	return tex.Sample(BasicSampler, input.sample_dir);
+	float3 color = tex.Sample(BasicSampler, input.sample_dir).rgb;
+
+    MRTOut output;
+    // alpha channel stands for light mask (skybox should not be lit)
+    output.albedo = float4(color, 0.0f);
+
+	return output;
 }

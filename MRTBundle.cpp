@@ -59,7 +59,7 @@ void mrt_bundle_create(
     out_bundle->formats = new DXGI_FORMAT[count];
     memcpy(out_bundle->formats, formats, sizeof(DXGI_FORMAT) * count);
     out_bundle->clear_colors = new float[count * 4];
-    memcpy(out_bundle->clear_colors, clear_colors, sizeof(float) * count * 4);
+    memcpy(out_bundle->clear_colors, clear_colors, sizeof(float) * 4 * count);
     out_bundle->count = count;
 
     D3D12_DESCRIPTOR_HEAP_DESC heap_desc = {};

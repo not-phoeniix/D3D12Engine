@@ -168,7 +168,7 @@ void Game::CreateMainPipelineStuff() {
         DXGI_FORMAT_R8G8B8A8_UNORM,
         DXGI_FORMAT_R8G8B8A8_UNORM,
         DXGI_FORMAT_R8G8B8A8_UNORM,
-        DXGI_FORMAT_R8G8B8A8_UNORM,
+        DXGI_FORMAT_R16G16B16A16_FLOAT,
     };
     float clear_colors[][4] = {
         {0.0f, 0.0f, 0.0f, 1.0f},
@@ -378,8 +378,12 @@ void Game::InitSky() {
         pso_desc.PS.pShaderBytecode = pixel_shader_bytecode->GetBufferPointer();
         pso_desc.PS.BytecodeLength = pixel_shader_bytecode->GetBufferSize();
 
-        pso_desc.NumRenderTargets = 1;
-        pso_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+        pso_desc.NumRenderTargets = mrt_bundles[0].count;
+        memcpy(
+            pso_desc.RTVFormats,
+            mrt_bundles[0].formats,
+            sizeof(DXGI_FORMAT) * mrt_bundles[0].count
+        );
         pso_desc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
         pso_desc.SampleDesc.Count = 1;
         pso_desc.SampleDesc.Quality = 0;
@@ -536,27 +540,6 @@ void Game::Draw(float deltaTime, float totalTime) {
     command_list->RSSetScissorRects(1, &scissor_rect);
     command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    // copy scene data - ONCE PER FRAME
-    {
-        SceneDataBuffer scene_data = {};
-        scene_data.camera_world_pos = camera->GetTransform().GetPosition();
-        scene_data.gamma = GAME_GAMMA;
-        scene_data.light_count = static_cast<uint32_t>(lights.size());
-        scene_data.skybox_cubemap_id = sky_cubemap_id;
-        scene_data.albedo_rt_id = mrt_bundles[frame_index].srv_descriptors[ALBEDO_RT_IDX].bindless_index;
-        scene_data.normals_rt_id = mrt_bundles[frame_index].srv_descriptors[NORMALS_RT_IDX].bindless_index;
-        scene_data.material_rt_id = mrt_bundles[frame_index].srv_descriptors[MATERIAL_RT_IDX].bindless_index;
-        scene_data.world_pos_depth_rt_id = mrt_bundles[frame_index].srv_descriptors[DEPTH_RT_IDX].bindless_index;
-        memcpy(
-            scene_data.lights,
-            lights.data(),
-            sizeof(Light) * lights.size()
-        );
-
-        D3D12_GPU_DESCRIPTOR_HANDLE handle = Graphics::CBHeapFillNext(&scene_data, sizeof(scene_data));
-        command_list->SetGraphicsRootDescriptorTable(1, handle);
-    }
-
     // ~~~ DEFERRED MRT DRAW ~~~
 
     // assuming that all materials use the same pipeline
@@ -610,31 +593,6 @@ void Game::Draw(float deltaTime, float totalTime) {
         command_list->DrawIndexedInstanced(mesh->get_index_count(), 1, 0, 0, 0);
     }
 
-    // ~~~ DEFERRED COMBINE DRAW ~~~
-
-    // Transition RTs to pixel shader resources
-    for (uint32_t i = 0; i < mrt_bundles[frame_index].count; i++) {
-        D3D12_RESOURCE_BARRIER rb = {};
-        rb.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        rb.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-        rb.Transition.pResource = mrt_bundles[frame_index].images[i].Get();
-        rb.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        rb.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        rb.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        Graphics::CommandList->ResourceBarrier(1, &rb);
-    }
-
-    command_list->OMSetRenderTargets(
-        1,
-        &Graphics::RTVHandles[frame_index],
-        true,
-        &Graphics::DSVHandle
-    );
-
-    // TAKE THE MRT SHTUFF AND COMBINE AND RENDER
-    command_list->SetPipelineState(fullscreen_pipeline_state.Get());
-    command_list->DrawInstanced(3, 1, 0, 0);
-
     // draw sky
     {
         command_list->SetGraphicsRootSignature(sky_root_signature.Get());
@@ -659,6 +617,53 @@ void Game::Draw(float deltaTime, float totalTime) {
 
         // then draw!
         command_list->DrawIndexedInstanced(cube_mesh->get_index_count(), 1, 0, 0, 0);
+    }
+
+    // deferred combine draw
+    {
+        // Transition RTs to pixel shader resources
+        for (uint32_t i = 0; i < mrt_bundles[frame_index].count; i++) {
+            D3D12_RESOURCE_BARRIER rb = {};
+            rb.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            rb.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+            rb.Transition.pResource = mrt_bundles[frame_index].images[i].Get();
+            rb.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            rb.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            rb.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            Graphics::CommandList->ResourceBarrier(1, &rb);
+        }
+
+        command_list->SetGraphicsRootSignature(root_signature.Get());
+        command_list->SetPipelineState(mrt_pipeline_state.Get());
+        command_list->OMSetRenderTargets(
+            1,
+            &Graphics::RTVHandles[frame_index],
+            true,
+            &Graphics::DSVHandle
+        );
+
+        // copy scene data - ONCE PER FRAME
+        SceneDataBuffer scene_data = {};
+        scene_data.camera_world_pos = camera->GetTransform().GetPosition();
+        scene_data.gamma = GAME_GAMMA;
+        scene_data.light_count = static_cast<uint32_t>(lights.size());
+        scene_data.skybox_cubemap_id = sky_cubemap_id;
+        scene_data.albedo_rt_id = mrt_bundles[frame_index].srv_descriptors[ALBEDO_RT_IDX].bindless_index;
+        scene_data.normals_rt_id = mrt_bundles[frame_index].srv_descriptors[NORMALS_RT_IDX].bindless_index;
+        scene_data.material_rt_id = mrt_bundles[frame_index].srv_descriptors[MATERIAL_RT_IDX].bindless_index;
+        scene_data.world_pos_depth_rt_id = mrt_bundles[frame_index].srv_descriptors[DEPTH_RT_IDX].bindless_index;
+        memcpy(
+            scene_data.lights,
+            lights.data(),
+            sizeof(Light) * lights.size()
+        );
+
+        D3D12_GPU_DESCRIPTOR_HANDLE handle = Graphics::CBHeapFillNext(&scene_data, sizeof(scene_data));
+        command_list->SetGraphicsRootDescriptorTable(1, handle);
+
+        // TAKE THE MRT SHTUFF AND COMBINE AND RENDER
+        command_list->SetPipelineState(fullscreen_pipeline_state.Get());
+        command_list->DrawInstanced(3, 1, 0, 0);
     }
 
     Present();
@@ -709,7 +714,7 @@ void Game::ClearPrevFrame() {
         // then clear
         command_list->ClearRenderTargetView(
             bundle->rtv_descriptors[i],
-            color,
+            &bundle->clear_colors[i * 4],
             0,
             nullptr
         );
@@ -747,7 +752,7 @@ void Game::Present() {
 
 void Game::RandomizeLights() {
     // randomize lights
-    lights.resize(10);
+    lights.resize(128);
     for (size_t i = 0; i < lights.size(); i++) {
         // rand type either 0, 1, 2
         lights[i].type = static_cast<uint32_t>(randf_range(0.0f, 2.999f));
@@ -769,7 +774,7 @@ void Game::RandomizeLights() {
         };
         lights[i].spot_inner_angle = randf_range(0.0f, 2.0f);
         lights[i].spot_outer_angle = randf_range(0.0f, 2.0f);
-        lights[i].intensity = randf_range(0.1f, 2.0f);
+        lights[i].intensity = randf_range(0.05f, 0.6f);
     }
 }
 
