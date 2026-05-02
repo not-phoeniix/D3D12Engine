@@ -12,12 +12,11 @@ class Material {
     DirectX::XMFLOAT3 color_tint;
     DirectX::XMFLOAT2 uv_scale;
     DirectX::XMFLOAT2 uv_offset;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline_state;
     uint32_t texture_indices[MATERIAL_MAX_TEXTURES];
     uint32_t texture_index_count;
 
    public:
-    Material(Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline_state);
+    Material();
     ~Material();
     Material(const Material& other);
     Material& operator=(const Material& other);
@@ -28,7 +27,6 @@ class Material {
     DirectX::XMFLOAT3 get_color_tint() const { return color_tint; }
     DirectX::XMFLOAT2 get_uv_scale() const { return uv_scale; }
     DirectX::XMFLOAT2 get_uv_offset() const { return uv_offset; }
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> get_pipeline_state() const { return pipeline_state; }
     const uint32_t* get_texture_indices() const { return texture_indices; }
     uint32_t get_texture_index_count() const { return texture_index_count; }
     void set_color_tint(DirectX::XMFLOAT3 color_tint) { this->color_tint = color_tint; }

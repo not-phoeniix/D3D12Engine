@@ -797,3 +797,33 @@ uint32_t Graphics::CreateCubemap(const std::wstring& path) {
     // Send back the index of the descriptor
     return srvIndex;
 }
+
+// slightly modified from:
+//   https://github.com/vixorien/ggp-demos/blob/main/GGP2/D3D12/10%20-%20Multiple%20Render%20Targets/Graphics.cpp
+
+void Graphics::ReserveDescriptorHeapSlot(D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu_handle) {
+    // Grab the actual heap start on both sides and offset to the next open SRV/UAV portion
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = CBVSRVDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = CBVSRVDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+
+    cpuHandle.ptr += (SIZE_T)srv_descriptor_offset * cbvsrv_descriptor_heap_increment_size;
+    gpuHandle.ptr += (SIZE_T)srv_descriptor_offset * cbvsrv_descriptor_heap_increment_size;
+
+    // Set the requested handle(s)
+    if (out_cpu_handle != nullptr) {
+        *out_cpu_handle = cpuHandle;
+    }
+    if (out_gpu_handle != nullptr) {
+        *out_gpu_handle = gpuHandle;
+    }
+
+    // Update the overall offset if at least one handle was reserved
+    if (out_cpu_handle || out_gpu_handle) {
+        srv_descriptor_offset++;
+    }
+}
+
+uint32_t Graphics::get_descriptor_index(D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle) {
+    return (unsigned int)((gpu_handle.ptr - CBVSRVDescriptorHeap->GetGPUDescriptorHandleForHeapStart().ptr) /
+                          Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+}

@@ -13,6 +13,10 @@ cbuffer SceneData : register(b0) {
 	Light lights[MAX_LIGHTS];
 	uint light_count;
 	uint skybox_cubemap_id;
+    uint albedo_rt_id;
+    uint normals_rt_id;
+    uint material_rt_id;
+    uint world_pos_depth_rt_id;
 };
 
 cbuffer MaterialData : register(b1) {
@@ -22,6 +26,13 @@ cbuffer MaterialData : register(b1) {
 	uint texture_count;
 	uint4 texture_indices[PACKED_VECTOR_COUNT];
 }
+
+struct MRTOut {
+	float4 albedo: SV_TARGET0;
+	float4 normals: SV_TARGET1;
+	float4 material: SV_TARGET2;
+	float4 world_pos_depth: SV_TARGET3;
+};
 
 uint get_texture_index(uint mat_index) {
 	uint arr_index = mat_index / 4;
@@ -41,12 +52,11 @@ float3 get_normal(Texture2D normal_tex, SamplerState s, PSInput input) {
 	return normalize(mul(unpacked_normal, TBN));
 }
 
-float4 main(PSInput input) : SV_TARGET {
+MRTOut main(PSInput input) {
 	Texture2D albedo = ResourceDescriptorHeap[get_texture_index(0)];
 	Texture2D metalness_map = ResourceDescriptorHeap[get_texture_index(1)];
 	Texture2D normal_map = ResourceDescriptorHeap[get_texture_index(2)];
 	Texture2D roughness_map = ResourceDescriptorHeap[get_texture_index(3)];		
-	TextureCube sky_cubemap = ResourceDescriptorHeap[skybox_cubemap_id];
 
 	// apply UV modifications
 	input.uv *= uv_scale;
@@ -61,39 +71,14 @@ float4 main(PSInput input) : SV_TARGET {
     float3 surface_color = albedo.Sample(BasicSampler, input.uv).rgb * color_tint;
 	float roughness = roughness_map.Sample(BasicSampler, input.uv).r;
 	float metalness = metalness_map.Sample(BasicSampler, input.uv).r;
-	float3 specular_color = lerp(F0_NON_METAL.rrr, surface_color.rgb, metalness);
 
-	float3 total_light = float3(0.0, 0.0, 0.0);
+	MRTOut output;
+	output.albedo = float4(surface_color, 1);
+	output.normals = float4(input.normal * 0.5f + 0.5f, 1.0f);
+	output.material = float4(roughness, metalness, 0.0f, 1.0f);
+	// im just gonna divide by a thousand to adhere to texture clamp restraints
+	output.world_pos_depth = float4(input.world_pos / 1000.0f, input.position.z);
 
-	uint light_iterations = min(light_count, MAX_LIGHTS);
-	for (uint i = 0; i < light_iterations; i++) {
-		Light light = lights[i];
-		light.direction = normalize(light.direction);
+	return output;
 
-		switch (light.type) {
-			case LIGHT_TYPE_DIRECTIONAL:
-				total_light += LightDirectionalPBR(light, input, camera_world_pos, roughness, specular_color, metalness, surface_color);
-				break;
-			case LIGHT_TYPE_POINT:
-				total_light += LightPointPBR(light, input, camera_world_pos, roughness, specular_color, metalness, surface_color);
-				break;
-			case LIGHT_TYPE_SPOT:
-				total_light += LightSpotPBR(light, input, camera_world_pos, roughness, specular_color, metalness, surface_color);
-				break;
-		}
-	}
-
-	// add skybox reflection
-	float3 to_frag = normalize(input.world_pos - camera_world_pos);
-	float3 refl_vec = reflect(to_frag, input.normal);
-	float3 sky_refl = sky_cubemap.Sample(BasicSampler, refl_vec).rgb;
-
-	float3 sky_surface_blend = lerp(
-		total_light, 
-		sky_refl, 
-		FresnelApprox(input.normal, -to_frag)
-	);
-
-	// gamma correction
-	return float4(pow(abs(sky_surface_blend), 1.0 / gamma), 1);;
 }

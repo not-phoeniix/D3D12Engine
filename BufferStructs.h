@@ -25,6 +25,10 @@ struct SceneDataBuffer {
     Light lights[MAX_LIGHTS];
     uint32_t light_count;
     uint32_t skybox_cubemap_id;
+    uint32_t albedo_rt_id;
+    uint32_t normals_rt_id;
+    uint32_t material_rt_id;
+    uint32_t world_pos_depth_rt_id;
 };
 
 struct MaterialBuffer {

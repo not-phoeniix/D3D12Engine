@@ -1,5 +1,4 @@
 #include "Game.h"
-#include "Graphics.h"
 #include "Vertex.h"
 #include "Input.h"
 #include "PathHelpers.h"
@@ -38,12 +37,17 @@ Game::Game() {
 // --------------------------------------------------------
 Game::~Game() {
     Graphics::WaitForGPU();
+    for (uint32_t i = 0; i < Graphics::NUM_BACK_BUFFERS; i++) {
+        mrt_bundle_destroy(&mrt_bundles[i]);
+    }
 }
 
 void Game::CreateMainPipelineStuff() {
     // load shader bytecode !!!
     Microsoft::WRL::ComPtr<ID3DBlob> vertex_shader_bytecode;
-    Microsoft::WRL::ComPtr<ID3DBlob> pixel_shader_bytecode;
+    Microsoft::WRL::ComPtr<ID3DBlob> fullscreen_tri_vertex_bytecode;
+    Microsoft::WRL::ComPtr<ID3DBlob> deferred_mrt_pixel_bytecode;
+    Microsoft::WRL::ComPtr<ID3DBlob> deferred_combine_pixel_bytecode;
     {
         D3DReadFileToBlob(
             FixPath(L"VertexShader.cso").c_str(),
@@ -51,8 +55,18 @@ void Game::CreateMainPipelineStuff() {
         );
 
         D3DReadFileToBlob(
-            FixPath(L"PixelShader.cso").c_str(),
-            pixel_shader_bytecode.GetAddressOf()
+            FixPath(L"FSTriVertexShader.cso").c_str(),
+            fullscreen_tri_vertex_bytecode.GetAddressOf()
+        );
+
+        D3DReadFileToBlob(
+            FixPath(L"DeferredMRTOutPixelShader.cso").c_str(),
+            deferred_mrt_pixel_bytecode.GetAddressOf()
+        );
+
+        D3DReadFileToBlob(
+            FixPath(L"DeferredCombinePixelShader.cso").c_str(),
+            deferred_combine_pixel_bytecode.GetAddressOf()
         );
     }
 
@@ -150,9 +164,38 @@ void Game::CreateMainPipelineStuff() {
         );
     }
 
-    // pipeline state
+    std::vector<DXGI_FORMAT> mrt_formats = {
+        DXGI_FORMAT_R8G8B8A8_UNORM,
+        DXGI_FORMAT_R8G8B8A8_UNORM,
+        DXGI_FORMAT_R8G8B8A8_UNORM,
+        DXGI_FORMAT_R8G8B8A8_UNORM,
+    };
+    float clear_colors[][4] = {
+        {0.0f, 0.0f, 0.0f, 1.0f},
+        {0.0f, 0.0f, 0.0f, 1.0f},
+        {0.0f, 0.0f, 0.0f, 1.0f},
+        {0.0f, 0.0f, 0.0f, 1.0f},
+    };
+
+    // MRT stuff
+    {
+        for (uint32_t i = 0; i < Graphics::NUM_BACK_BUFFERS; i++) {
+            mrt_bundle_create(
+                Window::Width(),
+                Window::Height(),
+                mrt_formats.data(),
+                reinterpret_cast<float*>(clear_colors),
+                static_cast<uint32_t>(mrt_formats.size()),
+                &mrt_bundles[i]
+            );
+        }
+    }
+
+    // pipeline states
     {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = {};
+
+        // ~~~ MRT PSO ~~~
 
         pso_desc.InputLayout.NumElements = (uint32_t)input_elements.size();
         pso_desc.InputLayout.pInputElementDescs = input_elements.data();
@@ -162,11 +205,15 @@ void Game::CreateMainPipelineStuff() {
 
         pso_desc.VS.pShaderBytecode = vertex_shader_bytecode->GetBufferPointer();
         pso_desc.VS.BytecodeLength = vertex_shader_bytecode->GetBufferSize();
-        pso_desc.PS.pShaderBytecode = pixel_shader_bytecode->GetBufferPointer();
-        pso_desc.PS.BytecodeLength = pixel_shader_bytecode->GetBufferSize();
+        pso_desc.PS.pShaderBytecode = deferred_mrt_pixel_bytecode->GetBufferPointer();
+        pso_desc.PS.BytecodeLength = deferred_mrt_pixel_bytecode->GetBufferSize();
 
-        pso_desc.NumRenderTargets = 1;
-        pso_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+        pso_desc.NumRenderTargets = static_cast<UINT>(mrt_formats.size());
+        memcpy(
+            pso_desc.RTVFormats,
+            mrt_formats.data(),
+            sizeof(DXGI_FORMAT) * mrt_formats.size()
+        );
         pso_desc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
         pso_desc.SampleDesc.Count = 1;
         pso_desc.SampleDesc.Quality = 0;
@@ -188,7 +235,24 @@ void Game::CreateMainPipelineStuff() {
 
         Graphics::Device->CreateGraphicsPipelineState(
             &pso_desc,
-            IID_PPV_ARGS(pipeline_state.GetAddressOf())
+            IID_PPV_ARGS(mrt_pipeline_state.GetAddressOf())
+        );
+
+        // ~~~ COMBINE PSO ~~~
+
+        pso_desc.VS.pShaderBytecode = fullscreen_tri_vertex_bytecode->GetBufferPointer();
+        pso_desc.VS.BytecodeLength = fullscreen_tri_vertex_bytecode->GetBufferSize();
+        pso_desc.PS.pShaderBytecode = deferred_combine_pixel_bytecode->GetBufferPointer();
+        pso_desc.PS.BytecodeLength = deferred_combine_pixel_bytecode->GetBufferSize();
+
+        pso_desc.NumRenderTargets = 1;
+        pso_desc.RTVFormats[1] = DXGI_FORMAT_UNKNOWN;
+        pso_desc.RTVFormats[2] = DXGI_FORMAT_UNKNOWN;
+        pso_desc.RTVFormats[3] = DXGI_FORMAT_UNKNOWN;
+
+        Graphics::Device->CreateGraphicsPipelineState(
+            &pso_desc,
+            IID_PPV_ARGS(fullscreen_pipeline_state.GetAddressOf())
         );
     }
 
@@ -363,7 +427,7 @@ void Game::SceneInit() {
 
     RandomizeLights();
 
-    std::shared_ptr<Material> mat_bronze = std::make_shared<Material>(pipeline_state);
+    std::shared_ptr<Material> mat_bronze = std::make_shared<Material>();
     {
         mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_albedo.png").c_str()));
         mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_metal.png").c_str()));
@@ -371,7 +435,7 @@ void Game::SceneInit() {
         mat_bronze->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/bronze_roughness.png").c_str()));
     }
 
-    std::shared_ptr<Material> mat_cobblestone = std::make_shared<Material>(pipeline_state);
+    std::shared_ptr<Material> mat_cobblestone = std::make_shared<Material>();
     {
         mat_cobblestone->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_albedo.png").c_str()));
         mat_cobblestone->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/cobblestone_metal.png").c_str()));
@@ -380,7 +444,7 @@ void Game::SceneInit() {
         mat_cobblestone->set_uv_scale({0.25f, 0.25f});
     }
 
-    std::shared_ptr<Material> mat_floor = std::make_shared<Material>(pipeline_state);
+    std::shared_ptr<Material> mat_floor = std::make_shared<Material>();
     {
         mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_albedo.png").c_str()));
         mat_floor->AddTexture(Graphics::LoadTexture(FixPath(L"../../Assets/Textures/floor_metal.png").c_str()));
@@ -427,6 +491,10 @@ void Game::OnResize() {
     scissor_rect.bottom = Window::Height();
 
     camera->UpdateProjectionMatrix(Window::AspectRatio());
+
+    for (uint32_t i = 0; i < Graphics::NUM_BACK_BUFFERS; i++) {
+        mrt_bundle_resize(Window::Width(), Window::Height(), &mrt_bundles[i]);
+    }
 }
 
 // --------------------------------------------------------
@@ -454,6 +522,8 @@ void Game::Draw(float deltaTime, float totalTime) {
         RandomizeLights();
     }
 
+    uint32_t frame_index = Graphics::get_swap_chain_index();
+
     // our actual rendering things happen between clearing and presenting !!!!!
 
     auto command_list = Graphics::CommandList;
@@ -462,12 +532,6 @@ void Game::Draw(float deltaTime, float totalTime) {
     command_list->SetGraphicsRootSignature(root_signature.Get());
 
     // set parameters & objects & references & etc for upcoming draw
-    command_list->OMSetRenderTargets(
-        1,
-        &Graphics::RTVHandles[Graphics::get_swap_chain_index()],
-        true,
-        &Graphics::DSVHandle
-    );
     command_list->RSSetViewports(1, &viewport);
     command_list->RSSetScissorRects(1, &scissor_rect);
     command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -479,6 +543,10 @@ void Game::Draw(float deltaTime, float totalTime) {
         scene_data.gamma = GAME_GAMMA;
         scene_data.light_count = static_cast<uint32_t>(lights.size());
         scene_data.skybox_cubemap_id = sky_cubemap_id;
+        scene_data.albedo_rt_id = mrt_bundles[frame_index].srv_descriptors[ALBEDO_RT_IDX].bindless_index;
+        scene_data.normals_rt_id = mrt_bundles[frame_index].srv_descriptors[NORMALS_RT_IDX].bindless_index;
+        scene_data.material_rt_id = mrt_bundles[frame_index].srv_descriptors[MATERIAL_RT_IDX].bindless_index;
+        scene_data.world_pos_depth_rt_id = mrt_bundles[frame_index].srv_descriptors[DEPTH_RT_IDX].bindless_index;
         memcpy(
             scene_data.lights,
             lights.data(),
@@ -488,6 +556,17 @@ void Game::Draw(float deltaTime, float totalTime) {
         D3D12_GPU_DESCRIPTOR_HANDLE handle = Graphics::CBHeapFillNext(&scene_data, sizeof(scene_data));
         command_list->SetGraphicsRootDescriptorTable(1, handle);
     }
+
+    // ~~~ DEFERRED MRT DRAW ~~~
+
+    // assuming that all materials use the same pipeline
+    command_list->SetPipelineState(mrt_pipeline_state.Get());
+    command_list->OMSetRenderTargets(
+        mrt_bundles[frame_index].count,
+        mrt_bundles[frame_index].rtv_descriptors,
+        true,
+        &Graphics::DSVHandle
+    );
 
     for (auto& entity : entities) {
         std::shared_ptr<Mesh> mesh = entity.get_mesh();
@@ -523,8 +602,6 @@ void Game::Draw(float deltaTime, float totalTime) {
             command_list->SetGraphicsRootDescriptorTable(2, handle);
         }
 
-        command_list->SetPipelineState(material->get_pipeline_state().Get());
-
         D3D12_VERTEX_BUFFER_VIEW vb_view = mesh->get_vb_view();
         command_list->IASetVertexBuffers(0, 1, &vb_view);
         D3D12_INDEX_BUFFER_VIEW ib_view = mesh->get_ib_view();
@@ -532,6 +609,31 @@ void Game::Draw(float deltaTime, float totalTime) {
 
         command_list->DrawIndexedInstanced(mesh->get_index_count(), 1, 0, 0, 0);
     }
+
+    // ~~~ DEFERRED COMBINE DRAW ~~~
+
+    // Transition RTs to pixel shader resources
+    for (uint32_t i = 0; i < mrt_bundles[frame_index].count; i++) {
+        D3D12_RESOURCE_BARRIER rb = {};
+        rb.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        rb.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        rb.Transition.pResource = mrt_bundles[frame_index].images[i].Get();
+        rb.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        rb.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        rb.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        Graphics::CommandList->ResourceBarrier(1, &rb);
+    }
+
+    command_list->OMSetRenderTargets(
+        1,
+        &Graphics::RTVHandles[frame_index],
+        true,
+        &Graphics::DSVHandle
+    );
+
+    // TAKE THE MRT SHTUFF AND COMBINE AND RENDER
+    command_list->SetPipelineState(fullscreen_pipeline_state.Get());
+    command_list->DrawInstanced(3, 1, 0, 0);
 
     // draw sky
     {
@@ -594,6 +696,24 @@ void Game::ClearPrevFrame() {
         0,      // no scissor rects
         nullptr // no scissor rects
     );
+
+    // clear and transition the MRT targets too !!
+    MRTBundle* bundle = &mrt_bundles[Graphics::get_swap_chain_index()];
+    for (uint32_t i = 0; i < bundle->count; i++) {
+        // transition state first
+        rb.Transition.pResource = bundle->images[i].Get();
+        rb.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        rb.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        command_list->ResourceBarrier(1, &rb);
+
+        // then clear
+        command_list->ClearRenderTargetView(
+            bundle->rtv_descriptors[i],
+            color,
+            0,
+            nullptr
+        );
+    }
 }
 
 void Game::Present() {

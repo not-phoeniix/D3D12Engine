@@ -5,8 +5,15 @@
 #include "Camera.h"
 #include "GameEntity.h"
 #include "Light.h"
+#include "Graphics.h"
+#include "MRTBundle.h"
 
 constexpr float GAME_GAMMA = 1.4f;
+
+constexpr uint32_t ALBEDO_RT_IDX = 0;
+constexpr uint32_t NORMALS_RT_IDX = 1;
+constexpr uint32_t MATERIAL_RT_IDX = 2;
+constexpr uint32_t DEPTH_RT_IDX = 3;
 
 class Game {
    public:
@@ -30,8 +37,12 @@ class Game {
 
     void RandomizeLights();
 
+    // mrt stuff
+    MRTBundle mrt_bundles[Graphics::NUM_BACK_BUFFERS];
+
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline_state;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> mrt_pipeline_state;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> fullscreen_pipeline_state;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> sky_root_signature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> sky_pipeline_state;
     std::shared_ptr<Mesh> cube_mesh;

@@ -69,6 +69,10 @@ namespace Graphics {
     uint32_t LoadTexture(const wchar_t* file, bool generate_mips = true);
     uint32_t CreateCubemap(const std::wstring& path);
 
+    // bindless things
+    void ReserveDescriptorHeapSlot(D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_handle, D3D12_GPU_DESCRIPTOR_HANDLE* out_gpu_handle);
+    uint32_t get_descriptor_index(D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle);
+
     // Command stuff & sync
     void ResetAllocatorAndCommandList(uint32_t index);
     void CloseAndExecuteCommandList();

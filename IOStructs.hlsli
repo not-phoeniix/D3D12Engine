@@ -16,6 +16,11 @@ struct PSInput {
 	float3 world_pos : TEXCOORD1;
 };
 
+struct PostProcessIn {
+	float4 position: SV_POSITION;
+	float2 uv : TEXCOORD0;
+};
+
 struct SkyPSIn {
 	float4 position : SV_POSITION;
 	float3 sample_dir : DIRECTION;
